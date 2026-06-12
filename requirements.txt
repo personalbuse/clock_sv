@@ -1,3 +1,4 @@
+setuptools<75
 textual
 rich
 sounddevice
