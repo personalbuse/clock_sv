@@ -29,7 +29,7 @@ llm:
 tts:
   provider: piper
   piper:
-    model_path: "models/piper/es_ES-carlfm-x_low/es_ES-carlfm-x_low.onnx"
+    model_path: "models/piper/es_ES-carlfm-x_low.onnx"
   gemini:
     model: gemini-2.5-flash-preview-tts
     voice: sadachbia

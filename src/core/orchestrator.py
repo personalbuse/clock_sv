@@ -65,7 +65,7 @@ class Orchestrator:
         self._tts_voice = tts_config.get("gemini", {}).get(
             "voice", "sadachbia")
         self._tts_piper_model_path = tts_config.get("piper", {}).get(
-            "model_path", "models/piper/es_ES-carlfm-x_low/es_ES-carlfm-x_low.onnx")
+            "model_path", "models/piper/es_ES-carlfm-x_low.onnx")
 
     def start(self) -> None:
         self.status.set_state("IDLE")

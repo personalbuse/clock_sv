@@ -6,6 +6,7 @@ Screen {
     layout: vertical;
     align: center middle;
     height: 1fr;
+    padding-top: 8;
 }
 
 ClockWidget {

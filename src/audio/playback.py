@@ -1,13 +1,11 @@
-import sounddevice as sd
-import numpy as np
-
-
 class AudioPlayback:
     def __init__(self, device: str = "default", sample_rate: int = 24000):
         self.device = device
         self.sample_rate = sample_rate
 
     def play(self, audio_bytes: bytes, sample_rate: int | None = None) -> None:
+        import numpy as np
+        import sounddevice as sd
         sr = sample_rate or self.sample_rate
         samples = np.frombuffer(audio_bytes, dtype=np.int16)
         sd.play(samples, samplerate=sr, device=self.device)

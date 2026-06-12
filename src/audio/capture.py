@@ -1,8 +1,6 @@
 import queue
 import threading
-
-import numpy as np
-import sounddevice as sd
+from typing import Any
 
 
 class AudioCapture:
@@ -12,7 +10,7 @@ class AudioCapture:
         self.channels = channels
         self.device = device
         self.dtype = dtype
-        self.stream: sd.InputStream | None = None
+        self.stream: Any = None
         self.callback_fn = None
         self._event = threading.Event()
         self._error = None
@@ -20,6 +18,7 @@ class AudioCapture:
     def start(self, callback_fn) -> bool:
         self.callback_fn = callback_fn
         try:
+            import sounddevice as sd
             self.stream = sd.InputStream(
                 samplerate=self.sample_rate,
                 channels=self.channels,
