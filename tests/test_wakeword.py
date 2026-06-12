@@ -4,7 +4,7 @@ from src.audio.wakeword import WakeWordDetector
 
 
 class TestWakeWord(unittest.TestCase):
-    @patch("src.audio.wakeword.WhisperModel")
+    @patch("faster_whisper.WhisperModel")
     def test_detection_above_threshold(self, mock_model):
         seg = type("Seg", (), {"text": "servidor"})()
         mock_model.return_value.transcribe.return_value = ([seg], None)

@@ -15,18 +15,28 @@ class AudioCapture:
         self.stream: sd.InputStream | None = None
         self.callback_fn = None
         self._event = threading.Event()
+        self._error = None
 
-    def start(self, callback_fn) -> None:
+    def start(self, callback_fn) -> bool:
         self.callback_fn = callback_fn
-        self.stream = sd.InputStream(
-            samplerate=self.sample_rate,
-            channels=self.channels,
-            device=self.device,
-            dtype=self.dtype,
-            callback=self._audio_callback,
-            blocksize=320,
-        )
-        self.stream.start()
+        try:
+            self.stream = sd.InputStream(
+                samplerate=self.sample_rate,
+                channels=self.channels,
+                device=self.device,
+                dtype=self.dtype,
+                callback=self._audio_callback,
+                blocksize=320,
+            )
+            self.stream.start()
+            return True
+        except Exception as e:
+            self._error = str(e)
+            return False
+
+    @property
+    def error(self) -> str | None:
+        return self._error
 
     def _audio_callback(self, indata, frames, time_info, status) -> None:
         if status:

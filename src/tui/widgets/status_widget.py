@@ -12,19 +12,19 @@ class StatusWidget(Static):
     def on_mount(self) -> None:
         self.state = "IDLE"
         self.log_lines = []
-        self.refresh()
+        self.update_display()
 
     def set_state(self, state: str) -> None:
         self.state = state
-        self.refresh()
+        self.update_display()
 
     def add_log(self, message: str) -> None:
         self.log_lines.append(message)
         if len(self.log_lines) > 10:
             self.log_lines.pop(0)
-        self.refresh()
+        self.update_display()
 
-    def refresh(self) -> None:
+    def update_display(self) -> None:
         separator = Text(f"\n{'─' * 50}\n", style="#555555")
         state_text = apply_gradient(f"[{self.state}]", *WHITE, *GRAY)
 

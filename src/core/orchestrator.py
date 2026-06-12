@@ -64,8 +64,15 @@ class Orchestrator:
 
     def start(self) -> None:
         self.status.set_state("IDLE")
-        self.status.add_log("esperando palabra clave 'servidor' o tecla 'x'")
-        self.capture.start(self._on_audio_chunk)
+        self.status.add_log("iniciando...")
+        ok = self.capture.start(self._on_audio_chunk)
+        if not ok:
+            self.status.add_log(
+                f"audio no disponible: {self.capture.error}")
+            self.status.add_log("modo TUI solo visual (sin microfono)")
+        else:
+            self.status.add_log(
+                "esperando palabra clave 'servidor' o tecla 'x'")
 
     def stop(self) -> None:
         self.capture.stop()

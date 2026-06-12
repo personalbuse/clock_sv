@@ -17,10 +17,10 @@ DAYS_ES = [
 
 class ClockWidget(Static):
     def on_mount(self) -> None:
-        self.set_interval(1, self.refresh)
-        self.refresh()
+        self.set_interval(1, self.update_display)
+        self.update_display()
 
-    def refresh(self) -> None:
+    def update_display(self) -> None:
         now = datetime.now()
         time_str = now.strftime("%H:%M:%S")
         day_name = DAYS_ES[now.weekday()]

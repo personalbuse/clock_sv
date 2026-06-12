@@ -1,4 +1,5 @@
 setuptools<75
+tqdm<4.67
 textual
 rich
 sounddevice
