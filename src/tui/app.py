@@ -58,3 +58,7 @@ class AssistantApp(App):
                 self.orchestrator.press_ptt()
             elif self.orchestrator.state.name == "LISTENING":
                 self.orchestrator.release_ptt()
+
+    def key_c(self) -> None:
+        if self.orchestrator:
+            self.orchestrator.cancel()

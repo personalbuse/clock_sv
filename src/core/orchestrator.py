@@ -77,7 +77,7 @@ class Orchestrator:
             self.status.add_log("modo TUI solo visual (sin microfono)")
         else:
             self.status.add_log(
-                "esperando palabra clave 'servidor' o tecla 'x'")
+                "esperando palabra clave 'servidor', tecla 'x' (PTT) o 'c' (cancelar)")
 
     def stop(self) -> None:
         self.capture.stop()
@@ -194,7 +194,7 @@ class Orchestrator:
         self._speech_frames = 0
         self._silence_frames = 0
         self._set_state(State.IDLE)
-        self.status.add_log("esperando palabra clave...")
+        self.status.add_log("esperando palabra clave 'servidor' o 'x'/'c'")
 
     def on_event(self, event: AssistantEvent, data=None) -> None:
         pass
@@ -209,3 +209,9 @@ class Orchestrator:
     def release_ptt(self) -> None:
         if self.state == State.LISTENING and len(self._audio_buffer) > 0:
             self._on_command_ready()
+
+    def cancel(self) -> None:
+        """Cancel current operation and return to IDLE."""
+        if self.state != State.IDLE:
+            self.status.add_log("cancelado")
+            self._return_to_idle()
