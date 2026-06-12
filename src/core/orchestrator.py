@@ -57,10 +57,15 @@ class Orchestrator:
             "model", "whisper-large-v3-turbo")
         self._llm_model = config.get("llm", {}).get(
             "model", "llama-3.1-8b-instant")
-        self._tts_model = config.get("tts", {}).get(
+
+        tts_config = config.get("tts", {})
+        self._tts_provider = tts_config.get("provider", "piper")
+        self._tts_model = tts_config.get("gemini", {}).get(
             "model", "gemini-2.5-flash-preview-tts")
-        self._tts_voice = config.get("tts", {}).get(
-            "voice", "es-ES-Standard-A")
+        self._tts_voice = tts_config.get("gemini", {}).get(
+            "voice", "sadachbia")
+        self._tts_piper_model_path = tts_config.get("piper", {}).get(
+            "model_path", "models/piper/es_ES-carlfm-x_low/es_ES-carlfm-x_low.onnx")
 
     def start(self) -> None:
         self.status.set_state("IDLE")
@@ -140,7 +145,6 @@ class Orchestrator:
         try:
             from src.services.stt_groq import transcribe as stt_transcribe
             from src.services.llm_groq import ask as llm_ask
-            from src.services.tts_gemini import synthesize as tts_synth
             from src.audio.playback import AudioPlayback
 
             audio_wav = self._audio_bytes()
@@ -163,10 +167,19 @@ class Orchestrator:
             self._set_state(State.SPEAKING)
             self.status.add_log("hablando...")
 
-            audio_data = tts_synth(
-                reply, api_key=self._google_api_key,
-                model=self._tts_model, voice=self._tts_voice)
-            playback = AudioPlayback()
+            if self._tts_provider == "piper":
+                from src.services.tts_piper import PiperTTS
+                tts = PiperTTS(self._tts_piper_model_path)
+                audio_data = tts.synthesize(reply)
+                sample_rate = tts.sample_rate
+            else:
+                from src.services.tts_gemini import synthesize as tts_synth
+                audio_data = tts_synth(
+                    reply, api_key=self._google_api_key,
+                    model=self._tts_model, voice=self._tts_voice)
+                sample_rate = 24000
+
+            playback = AudioPlayback(sample_rate=sample_rate)
             playback.play(audio_data)
         except Exception as e:
             self.status.add_log(f"error: {e}")

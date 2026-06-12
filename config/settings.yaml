@@ -27,8 +27,12 @@ llm:
   max_tokens: 256
 
 tts:
-  model: gemini-2.5-flash-preview-tts
-  voice: sadachbia
+  provider: piper
+  piper:
+    model_path: "models/piper/es_ES-carlfm-x_low/es_ES-carlfm-x_low.onnx"
+  gemini:
+    model: gemini-2.5-flash-preview-tts
+    voice: sadachbia
   timeout: 20
 
 web_search:
