@@ -28,14 +28,7 @@ Wants=network-online.target sound.target
 Type=forking
 ExecStartPre=-/usr/bin/screen -S clock -X quit
 ExecStartPre=/usr/bin/pulseaudio --start
-ExecStart=/usr/bin/screen -dmS clock bash -c '
-  export XDG_RUNTIME_DIR=/run/user/\$(id -u)
-  export TZ=America/Bogota
-  export PYTHONPATH=/home/dabuma/$DEST
-  cd /home/dabuma/$DEST
-  source venv/bin/activate
-  exec python src/main.py
-'
+ExecStart=/home/dabuma/${DEST}/scripts/run_clock.sh
 ExecStop=/usr/bin/screen -S clock -X quit
 User=dabuma
 Group=dabuma
