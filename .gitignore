@@ -9,3 +9,6 @@ models/whisper-tiny/
 *.egg-info/
 dist/
 build/
+.pytest_cache/
+.venv/
+venv/
