@@ -13,3 +13,4 @@ requests
 python-dotenv
 pyyaml
 rapidfuzz
+pyfiglet
