@@ -2,9 +2,15 @@ Screen {
     background: #000000;
 }
 
+#main {
+    layout: vertical;
+    align: center middle;
+    height: 1fr;
+}
+
 ClockWidget {
     width: 100%;
-    height: 25;
+    height: 9;
     content-align: center middle;
 }
 

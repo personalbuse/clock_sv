@@ -1,4 +1,5 @@
 from textual.app import App, ComposeResult
+from textual.containers import Container
 
 from src.core.orchestrator import Orchestrator
 from src.utils.config import load_config
@@ -16,8 +17,9 @@ class AssistantApp(App):
         self.orchestrator: Orchestrator | None = None
 
     def compose(self) -> ComposeResult:
-        yield ClockWidget()
-        yield WeatherWidget()
+        with Container(id="main"):
+            yield ClockWidget()
+            yield WeatherWidget()
         yield StatusWidget()
 
     def on_mount(self) -> None:

@@ -1,3 +1,4 @@
+duckduckgo_search
 setuptools<75
 tqdm<4.67
 textual
@@ -12,4 +13,3 @@ requests
 python-dotenv
 pyyaml
 rapidfuzz
-pyfiglet
