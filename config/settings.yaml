@@ -28,7 +28,7 @@ llm:
 
 tts:
   model: gemini-2.5-flash-preview-tts
-  voice: es-ES-Standard-C
+  voice: sadachbia
   timeout: 20
 
 weather:
