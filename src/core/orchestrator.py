@@ -179,7 +179,10 @@ class Orchestrator:
                     model=self._tts_model, voice=self._tts_voice)
                 sample_rate = 24000
 
-            playback = AudioPlayback(sample_rate=sample_rate)
+            playback = AudioPlayback(
+                sample_rate=sample_rate,
+                volume_gain=self.config.get("audio", {}).get("volume_gain", 1.0),
+            )
             playback.play(audio_data)
         except Exception as e:
             self.status.add_log(f"error: {e}")
