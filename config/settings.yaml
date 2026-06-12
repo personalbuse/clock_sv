@@ -1,0 +1,48 @@
+system_prompt: >
+  Eres un asistente de voz servidor inteligente. Responde siempre en español,
+  de forma breve y directa. Tus respuestas no deben exceder 3 oraciones
+  para minimizar el tiempo de síntesis de voz.
+
+language: es
+vad:
+  aggressiveness: 2
+  frame_ms: 20
+  sample_rate: 16000
+
+wake_word:
+  word: servidor
+  threshold: 80
+  buffer_seconds: 2.0
+  model_size: tiny
+  compute_type: int8
+
+stt:
+  model: whisper-large-v3-turbo
+  timeout: 10
+
+llm:
+  model: llama-3.1-8b-instant
+  timeout: 15
+  temperature: 0.7
+  max_tokens: 256
+
+tts:
+  model: gemini-2.5-flash-preview-tts
+  voice: es-ES-Standard-A
+  timeout: 20
+
+weather:
+  lat: 7.3742
+  lon: -72.6477
+  interval_minutes: 15
+
+audio:
+  device: default
+  sample_rate: 16000
+  channels: 1
+  dtype: int16
+
+tui:
+  clock_format: "%H:%M:%S"
+  date_format: "%A, %d-%m-%y"
+  refresh_interval: 1.0

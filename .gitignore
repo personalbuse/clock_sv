@@ -1,0 +1,11 @@
+.env
+__pycache__/
+*.pyc
+*.pyo
+*.wav
+*.log
+models/whisper-tiny/
+.DS_Store
+*.egg-info/
+dist/
+build/

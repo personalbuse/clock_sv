@@ -1,0 +1,13 @@
+textual
+rich
+sounddevice
+numpy
+webrtcvad
+faster-whisper
+groq
+google-genai
+requests
+python-dotenv
+pyyaml
+rapidfuzz
+pyfiglet

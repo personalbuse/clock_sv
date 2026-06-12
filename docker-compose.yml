@@ -1,0 +1,15 @@
+services:
+  assistant:
+    build: .
+    devices:
+      - /dev/snd:/dev/snd
+    group_add:
+      - audio
+    env_file: .env
+    volumes:
+      - ./models:/app/models
+    mem_limit: 1.5g
+    cpus: 2.0
+    restart: unless-stopped
+    stdin_open: true
+    tty: true
