@@ -25,6 +25,7 @@ class Orchestrator:
         self.config = config
         self.status = status_widget
         self.state = State.IDLE
+        self._playback = None  # Store reference to current playback
 
         ac = config.get("audio", {})
         vc = config.get("vad", {})
@@ -183,7 +184,13 @@ class Orchestrator:
                 sample_rate=sample_rate,
                 volume_gain=self.config.get("audio", {}).get("volume_gain", 1.0),
             )
-            playback.play(audio_data)
+            self._playback = playback
+            self._set_state(State.SPEAKING)
+            playback.play_async(audio_data)
+            # Wait for playback to finish
+            import time
+            while playback._playback_thread and playback._playback_thread.is_alive():
+                time.sleep(0.1)
         except Exception as e:
             self.status.add_log(f"error: {e}")
         finally:
@@ -213,5 +220,9 @@ class Orchestrator:
     def cancel(self) -> None:
         """Cancel current operation and return to IDLE."""
         if self.state != State.IDLE:
-            self.status.add_log("cancelado")
+            if self.state == State.SPEAKING and self._playback:
+                self._playback.stop()
+                self.status.add_log("reproducción cancelada")
+            else:
+                self.status.add_log("cancelado")
             self._return_to_idle()

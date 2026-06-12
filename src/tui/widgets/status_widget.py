@@ -30,6 +30,12 @@ class StatusWidget(Static):
         content.append(state_text)
         content.append("\n")
 
+        # Show control hints in IDLE state
+        if self.state == "IDLE":
+            hints = apply_gradient("(X=PTT  C=Cancelar)", *GRAY, *WHITE)
+            content.append(hints)
+            content.append("\n")
+
         for line in self.log_lines[-5:]:
             content.append(apply_gradient(line, *GRAY, *WHITE))
             content.append("\n")
