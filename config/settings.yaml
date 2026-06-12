@@ -49,7 +49,7 @@ audio:
   sample_rate: 16000
   channels: 1
   dtype: int16
-  volume_gain: 3.0
+  volume_gain: 8.0
 
 tui:
   clock_format: "%H:%M:%S"

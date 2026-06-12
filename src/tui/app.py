@@ -2,6 +2,9 @@ from textual.app import App, ComposeResult
 from textual.containers import Container
 
 from src.core.orchestrator import Orchestrator
+import locale
+import subprocess
+
 from src.utils.config import load_config
 from src.tui.widgets.clock_widget import ClockWidget
 from src.tui.widgets.weather_widget import WeatherWidget
@@ -23,6 +26,7 @@ class AssistantApp(App):
         yield StatusWidget()
 
     def on_mount(self) -> None:
+        self._ensure_pulseaudio()
         weather = self.query_one(WeatherWidget)
         wc = self.config.get("weather", {})
         weather.set_coords(wc.get("lat", 7.3742), wc.get("lon", -72.6477))
@@ -30,6 +34,23 @@ class AssistantApp(App):
         status = self.query_one(StatusWidget)
         self.orchestrator = Orchestrator(self.config, status)
         self.orchestrator.start()
+
+    @staticmethod
+    def _ensure_pulseaudio() -> None:
+        try:
+            subprocess.run(
+                ["pulseaudio", "--check"],
+                capture_output=True, timeout=3,
+            )
+        except Exception:
+            pass
+        try:
+            subprocess.run(
+                ["pulseaudio", "--start"],
+                capture_output=True, timeout=5,
+            )
+        except Exception:
+            pass
 
     def key_x(self) -> None:
         if self.orchestrator:

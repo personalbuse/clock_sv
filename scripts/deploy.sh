@@ -16,9 +16,41 @@ rsync -avz --delete \
     ./ "$HOST:$DEST/"
 
 echo ""
-echo "=== Restarting app on remote ==="
-ssh "$HOST" "cd $DEST && source venv/bin/activate && nohup python src/main.py > /tmp/clock_sv.log 2>&1 &"
+echo "=== Reinstalling systemd service ==="
+ssh "$HOST" "
+  echo 1234 | sudo -S tee /etc/systemd/system/clock.service > /dev/null <<'SVC'
+[Unit]
+Description=Clock Voice Assistant
+After=network-online.target sound.target
+Wants=network-online.target sound.target
+
+[Service]
+Type=forking
+ExecStartPre=-/usr/bin/screen -S clock -X quit
+ExecStartPre=/usr/bin/pulseaudio --start
+ExecStart=/usr/bin/screen -dmS clock bash -c '
+  export XDG_RUNTIME_DIR=/run/user/\$(id -u)
+  export TZ=America/Bogota
+  export PYTHONPATH=/home/dabuma/$DEST
+  cd /home/dabuma/$DEST
+  source venv/bin/activate
+  exec python src/main.py
+'
+ExecStop=/usr/bin/screen -S clock -X quit
+User=dabuma
+Group=dabuma
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+SVC
+  echo 1234 | sudo -S systemctl daemon-reload
+  echo 1234 | sudo -S systemctl enable clock.service
+  echo 1234 | sudo -S systemctl restart clock.service
+"
 
 echo ""
 echo "=== Done ==="
-echo "Logs: ssh $HOST 'tail -f /tmp/clock_sv.log'"
+echo "Connect: ssh -t $HOST screen -r clock"
+echo "Detach:  Ctrl+A, D"
