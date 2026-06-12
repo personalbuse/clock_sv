@@ -7,13 +7,16 @@
 # Deploy & Persistencia
 
 - Remote: dabuma@192.168.1.22, server headless
-- Deploy: bash scripts/deploy.sh (rsync + systemd restart)
-- App corre en screen session "clock" (ssh -t dabuma@... screen -r clock)
-- Persistencia via systemd system service clock.service
-  - ExecStartPre: pulseaudio --start
-  - ExecStart: scripts/run_clock.sh (wrapper que exporta XDG_RUNTIME_DIR, TZ, PYTHONPATH)
-  - Restart=always (se resucita sola si crashea)
-  - Linger habilitado para dabuma
-- Audio device: "default" via PulseAudio (único que soporta 16kHz input+output con PortAudio)
+- Deploy: bash scripts/deploy.sh (rsync, sin systemd)
+- App se ejecuta manual: `cd clock_sv && ./run.sh` (wrapper que reinicia PulseAudio + app)
+- Persistencia: NO systemd service (manual)
+- Linger habilitado para dabuma
+- Audio: device "default" via PulseAudio
 - Volume gain: 8.0x en settings.yaml (ajustable via audio.volume_gain)
-- ALSA hw:0,0 no soporta 16kHz directo; sysdefault solo funciona para input
+- ALSA hw:0,0 no soporta 16kHz directo; solo PulseAudio default funciona
+
+# Controles TUI
+
+- X: Push-to-Talk (grabar)
+- C: Cancelar operación actual (incluso mientras habla)
+- Palabra clave: "servidor" (activación automática)
