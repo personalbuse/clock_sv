@@ -10,8 +10,14 @@ def synthesize(text: str, api_key: str,
             model=model,
             contents=text,
             config={
-                "response_modality": ["AUDIO"],
-                "voice_config": {"voice_name": voice},
+                "response_modalities": ["AUDIO"],
+                "speech_config": {
+                    "voice_config": {
+                        "prebuilt_voice_config": {
+                            "voice_name": voice,
+                        }
+                    }
+                },
             },
         )
         audio_data = response.candidates[0].content.parts[0].inline_data.data

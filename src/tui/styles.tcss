@@ -4,20 +4,20 @@ Screen {
 
 ClockWidget {
     width: 100%;
+    height: 15;
     content-align: center middle;
-    height: 10;
-    margin: 1 0 0 0;
+    margin: 2 0 0 0;
 }
 
 WeatherWidget {
     width: 100%;
-    content-align: center middle;
     height: 1;
-    margin: 0 0 1 0;
+    content-align: center middle;
 }
 
 StatusWidget {
+    dock: bottom;
     width: 100%;
     height: 8;
-    margin: 1 2 1 2;
+    padding: 0 2;
 }

@@ -1,5 +1,4 @@
 from rich.text import Text
-from rich.style import Style
 from textual.widgets import Static
 
 from src.tui.gradient import apply_gradient
@@ -25,11 +24,9 @@ class StatusWidget(Static):
         self.update_display()
 
     def update_display(self) -> None:
-        separator = Text(f"\n{'─' * 50}\n", style="#555555")
         state_text = apply_gradient(f"[{self.state}]", *WHITE, *GRAY)
 
         content = Text()
-        content.append(separator)
         content.append(state_text)
         content.append("\n")
 

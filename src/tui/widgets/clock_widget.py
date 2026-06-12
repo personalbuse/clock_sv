@@ -26,7 +26,7 @@ class ClockWidget(Static):
         day_name = DAYS_ES[now.weekday()]
         date_str = f"{day_name}, {now.strftime('%d-%m-%y')}"
 
-        fig = pyfiglet.Figlet(font="digital")
+        fig = pyfiglet.Figlet(font="standard")
         clock_art = fig.renderText(time_str).rstrip("\n")
         lines = clock_art.split("\n")
 
