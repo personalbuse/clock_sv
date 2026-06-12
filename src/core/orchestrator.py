@@ -1,4 +1,9 @@
+import io
+import threading
+
 from enum import Enum, auto
+
+import numpy as np
 
 from src.audio.capture import AudioCapture
 from src.audio.vad import VAD
@@ -46,6 +51,17 @@ class Orchestrator:
         self._silence_frames = 0
         self._silence_timeout = 30
 
+        self._groq_api_key = config.get("groq_api_key", "")
+        self._google_api_key = config.get("google_api_key", "")
+        self._stt_model = config.get("stt", {}).get(
+            "model", "whisper-large-v3-turbo")
+        self._llm_model = config.get("llm", {}).get(
+            "model", "llama-3.1-8b-instant")
+        self._tts_model = config.get("tts", {}).get(
+            "model", "gemini-2.5-flash-preview-tts")
+        self._tts_voice = config.get("tts", {}).get(
+            "voice", "es-ES-Standard-A")
+
     def start(self) -> None:
         self.status.set_state("IDLE")
         self.status.add_log("esperando palabra clave 'servidor' o tecla 'x'")
@@ -89,6 +105,73 @@ class Orchestrator:
     def _on_command_ready(self) -> None:
         self._set_state(State.TRANSCRIBING)
         self.status.add_log("silencio detectado, transcribiendo...")
+        threading.Thread(target=self._process_pipeline, daemon=True).start()
+
+    def _audio_bytes(self) -> bytes:
+        raw = b"".join(self._audio_buffer)
+        import struct
+        sample_rate = 16000
+        duration = len(raw) // (sample_rate * 2)
+        if duration < 1:
+            duration = 1
+        data_size = len(raw)
+        wav_header = (
+            b"RIFF" +
+            struct.pack("<I", 36 + data_size) +
+            b"WAVE" +
+            b"fmt " +
+            struct.pack("<I", 16) +
+            struct.pack("<HHIIHH", 1, 1, sample_rate,
+                         sample_rate * 2, 2, 16) +
+            b"data" +
+            struct.pack("<I", data_size) +
+            raw
+        )
+        return wav_header
+
+    def _process_pipeline(self) -> None:
+        try:
+            from src.services.stt_groq import transcribe as stt_transcribe
+            from src.services.llm_groq import ask as llm_ask
+            from src.services.tts_gemini import synthesize as tts_synth
+            from src.audio.playback import AudioPlayback
+
+            audio_wav = self._audio_bytes()
+            text = stt_transcribe(
+                audio_wav, api_key=self._groq_api_key,
+                model=self._stt_model)
+            if not text:
+                self.status.add_log("no se detecto voz")
+                self._return_to_idle()
+                return
+
+            self.status.add_log(f"tu: {text}")
+            self._set_state(State.THINKING)
+            self.status.add_log("procesando respuesta...")
+
+            reply = llm_ask(text, api_key=self._groq_api_key,
+                            model=self._llm_model)
+            self.status.add_log(f"asistente: {reply}")
+
+            self._set_state(State.SPEAKING)
+            self.status.add_log("hablando...")
+
+            audio_data = tts_synth(
+                reply, api_key=self._google_api_key,
+                model=self._tts_model, voice=self._tts_voice)
+            playback = AudioPlayback()
+            playback.play(audio_data)
+        except Exception as e:
+            self.status.add_log(f"error: {e}")
+        finally:
+            self._return_to_idle()
+
+    def _return_to_idle(self) -> None:
+        self._audio_buffer = []
+        self._speech_frames = 0
+        self._silence_frames = 0
+        self._set_state(State.IDLE)
+        self.status.add_log("esperando palabra clave...")
 
     def on_event(self, event: AssistantEvent, data=None) -> None:
         pass
