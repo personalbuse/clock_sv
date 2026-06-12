@@ -3,7 +3,7 @@ from google import genai
 
 def synthesize(text: str, api_key: str,
                model: str = "gemini-2.5-flash-preview-tts",
-               voice: str = "es-ES-Standard-A") -> bytes:
+               voice: str = "es-ES-Standard-C") -> bytes:
     client = genai.Client(api_key=api_key)
     try:
         response = client.models.generate_content(

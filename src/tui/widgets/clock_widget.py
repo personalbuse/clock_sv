@@ -7,7 +7,7 @@ from textual.widgets import Static
 from src.tui.gradient import gradient_lines
 
 WHITE = (255, 255, 255)
-GRAY = (136, 136, 136)
+DARK = (80, 80, 80)
 
 DAYS_ES = [
     "lunes", "martes", "miercoles", "jueves",
@@ -26,13 +26,15 @@ class ClockWidget(Static):
         day_name = DAYS_ES[now.weekday()]
         date_str = f"{day_name}, {now.strftime('%d-%m-%y')}"
 
-        fig = pyfiglet.Figlet(font="standard")
+        fig = pyfiglet.Figlet(font="big")
         clock_art = fig.renderText(time_str).rstrip("\n")
         lines = clock_art.split("\n")
 
-        gradient_lines_list = gradient_lines(lines, *WHITE, *GRAY, reverse=True)
+        gradient_lines_list = gradient_lines(lines, *WHITE, *DARK, reverse=True)
         clock_rich = Text("\n").join(gradient_lines_list)
 
-        date_text = Text("\n" + date_str, style="bold #aaaaaa")
+        max_width = max(len(l) for l in lines)
+        date_padded = date_str.center(max_width)
+        date_text = Text("\n" + date_padded, style="bold #aaaaaa")
 
         self.update(clock_rich + date_text)
