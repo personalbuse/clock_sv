@@ -123,7 +123,8 @@ class Orchestrator:
             self._on_command_ready()
 
     def _on_command_ready(self) -> None:
-        self._cancel_event.clear()
+        if self._cancel_event.is_set():
+            return
         self._set_state(State.TRANSCRIBING)
         self.status.add_log("transcribiendo...")
         threading.Thread(target=self._process_pipeline, daemon=True).start()
@@ -152,6 +153,8 @@ class Orchestrator:
 
     def _process_pipeline(self) -> None:
         try:
+            self._cancel_event.clear()
+
             if self._cancel_event.is_set():
                 return
 
@@ -246,6 +249,5 @@ class Orchestrator:
             self._cancel_event.set()
             self._return_to_idle()
             self.status.add_log("cancelado")
-            self.status.flash_cancel()
         except Exception:
             pass
