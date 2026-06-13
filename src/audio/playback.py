@@ -39,8 +39,8 @@ class AudioPlayback:
             sd.stop()
         except Exception:
             pass
-        if self._playback_thread:
-            self._playback_thread.join(timeout=1)
+        if self._playback_thread and self._playback_thread is not threading.current_thread():
+            self._playback_thread.join(timeout=2)
 
     def play_blocking(self, audio_bytes: bytes, sample_rate: int = 24000) -> None:
         self.play(audio_bytes, sample_rate)

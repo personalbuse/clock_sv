@@ -10,6 +10,7 @@ vad:
   sample_rate: 16000
 
 wake_word:
+  enabled: false
   word: servidor
   threshold: 80
   buffer_seconds: 2.0

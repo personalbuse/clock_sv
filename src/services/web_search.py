@@ -1,3 +1,6 @@
+import contextlib
+import os
+
 from duckduckgo_search import DDGS
 
 
@@ -22,8 +25,10 @@ TOOL_DEF = {
 
 def search(query: str, max_results: int = 5) -> str:
     try:
-        with DDGS() as ddgs:
-            results = list(ddgs.text(query, max_results=max_results))
+        with open(os.devnull, "w") as devnull:
+            with contextlib.redirect_stdout(devnull), contextlib.redirect_stderr(devnull):
+                with DDGS() as ddgs:
+                    results = list(ddgs.text(query, max_results=max_results))
         if not results:
             return "No se encontraron resultados."
         lines = [f"Resultado {i+1}: {r['title']} - {r['href']}\n{r['body']}"

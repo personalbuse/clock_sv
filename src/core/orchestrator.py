@@ -25,7 +25,9 @@ class Orchestrator:
         self.config = config
         self.status = status_widget
         self.state = State.IDLE
-        self._playback = None  # Store reference to current playback
+        self._lock = threading.Lock()
+        self._cancel_event = threading.Event()
+        self._playback = None
 
         ac = config.get("audio", {})
         vc = config.get("vad", {})
@@ -36,12 +38,18 @@ class Orchestrator:
             sample_rate=vc.get("sample_rate", 16000),
             frame_ms=vc.get("frame_ms", 20),
         )
-        self.wakeword = WakeWordDetector(
-            word=wc.get("word", "servidor"),
-            threshold=wc.get("threshold", 80),
-            model_size=wc.get("model_size", "tiny"),
-            compute_type=wc.get("compute_type", "int8"),
-        )
+
+        wake_enabled = wc.get("enabled", True)
+        if wake_enabled:
+            self.wakeword = WakeWordDetector(
+                word=wc.get("word", "servidor"),
+                threshold=wc.get("threshold", 80),
+                model_size=wc.get("model_size", "tiny"),
+                compute_type=wc.get("compute_type", "int8"),
+            )
+        else:
+            self.wakeword = None
+
         self.capture = AudioCapture(
             sample_rate=ac.get("sample_rate", 16000),
             device=ac.get("device", "default"),
@@ -77,14 +85,18 @@ class Orchestrator:
                 f"audio no disponible: {self.capture.error}")
             self.status.add_log("modo TUI solo visual (sin microfono)")
         else:
+            hint = ""
+            if self.wakeword:
+                hint = "palabra clave, "
             self.status.add_log(
-                "esperando palabra clave 'servidor', tecla 'x' (PTT) o 'c' (cancelar)")
+                f"esperando {hint}tecla 'x' (PTT) o 'c' (cancelar)")
 
     def stop(self) -> None:
         self.capture.stop()
 
     def _set_state(self, new_state: State) -> None:
-        self.state = new_state
+        with self._lock:
+            self.state = new_state
         self.status.set_state(new_state.name)
 
     def _on_audio_chunk(self, chunk: bytes) -> None:
@@ -94,15 +106,16 @@ class Orchestrator:
             self._listening_loop(chunk)
 
     def _idle_loop(self, chunk: bytes) -> None:
-        if self.vad.is_speech_chunk(chunk):
-            if self.wakeword.feed(chunk):
-                self._set_state(State.LISTENING)
-                self.status.add_log("palabra clave detectada, escuchando...")
-                self._audio_buffer = []
-                self._speech_frames = 0
-                self._silence_frames = 0
-        else:
-            self.wakeword.reset()
+        if not self.wakeword or not self.vad.is_speech_chunk(chunk):
+            if self.wakeword:
+                self.wakeword.reset()
+            return
+        if self.wakeword.feed(chunk):
+            self._set_state(State.LISTENING)
+            self.status.add_log("palabra clave detectada, escuchando...")
+            self._audio_buffer = []
+            self._speech_frames = 0
+            self._silence_frames = 0
 
     def _listening_loop(self, chunk: bytes) -> None:
         self._audio_buffer.append(chunk)
@@ -143,6 +156,7 @@ class Orchestrator:
         return wav_header
 
     def _process_pipeline(self) -> None:
+        self._cancel_event.clear()
         try:
             from src.services.stt_groq import transcribe as stt_transcribe
             from src.services.llm_groq import ask as llm_ask
@@ -157,12 +171,19 @@ class Orchestrator:
                 self._return_to_idle()
                 return
 
+            if self._cancel_event.is_set():
+                return
+
             self.status.add_log(f"tu: {text}")
             self._set_state(State.THINKING)
             self.status.add_log("procesando respuesta...")
 
             reply = llm_ask(text, api_key=self._groq_api_key,
                             model=self._llm_model)
+
+            if self._cancel_event.is_set():
+                return
+
             self.status.add_log(f"asistente: {reply}")
 
             self._set_state(State.SPEAKING)
@@ -187,10 +208,11 @@ class Orchestrator:
             self._playback = playback
             self._set_state(State.SPEAKING)
             playback.play_async(audio_data)
-            # Wait for playback to finish
-            import time
-            while playback._playback_thread and playback._playback_thread.is_alive():
-                time.sleep(0.1)
+            # Wait for playback with timeout
+            if playback._playback_thread:
+                playback._playback_thread.join(timeout=30)
+                if playback._playback_thread.is_alive():
+                    playback.stop()
         except Exception as e:
             self.status.add_log(f"error: {e}")
         finally:
@@ -201,7 +223,10 @@ class Orchestrator:
         self._speech_frames = 0
         self._silence_frames = 0
         self._set_state(State.IDLE)
-        self.status.add_log("esperando palabra clave 'servidor' o 'x'/'c'")
+        hint = ""
+        if self.wakeword:
+            hint = "palabra clave, "
+        self.status.add_log(f"esperando {hint}tecla 'x' (PTT) o 'c' (cancelar)")
 
     def on_event(self, event: AssistantEvent, data=None) -> None:
         pass
@@ -219,10 +244,13 @@ class Orchestrator:
 
     def cancel(self) -> None:
         """Cancel current operation and return to IDLE."""
-        if self.state != State.IDLE:
+        with self._lock:
+            if self.state == State.IDLE:
+                return
             if self.state == State.SPEAKING and self._playback:
                 self._playback.stop()
                 self.status.add_log("reproducción cancelada")
-            else:
+            elif self.state != State.IDLE:
                 self.status.add_log("cancelado")
-            self._return_to_idle()
+        self._cancel_event.set()
+        self._return_to_idle()
