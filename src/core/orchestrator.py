@@ -1,6 +1,5 @@
 import io
 import threading
-from concurrent.futures import ThreadPoolExecutor, TimeoutError
 
 from enum import Enum, auto
 
@@ -124,6 +123,7 @@ class Orchestrator:
             self._on_command_ready()
 
     def _on_command_ready(self) -> None:
+        self._cancel_event.clear()
         self._set_state(State.TRANSCRIBING)
         self.status.add_log("transcribiendo...")
         threading.Thread(target=self._process_pipeline, daemon=True).start()
@@ -151,45 +151,33 @@ class Orchestrator:
         return wav_header
 
     def _process_pipeline(self) -> None:
-        self._cancel_event.clear()
         try:
+            if self._cancel_event.is_set():
+                return
+
             from src.services.stt_groq import transcribe as stt_transcribe
             from src.services.llm_groq import ask as llm_ask
             from src.audio.playback import AudioPlayback
 
             audio_wav = self._audio_bytes()
+            text = stt_transcribe(
+                audio_wav, api_key=self._groq_api_key,
+                model=self._stt_model, timeout=10)
 
-            with ThreadPoolExecutor(max_workers=1) as pool:
-                future = pool.submit(
-                    stt_transcribe, audio_wav,
-                    api_key=self._groq_api_key, model=self._stt_model)
-                try:
-                    text = future.result(timeout=15)
-                except TimeoutError:
-                    self.status.add_log("transcripción cancelada (timeout)")
-                    return
+            if self._cancel_event.is_set():
+                return
 
             if not text:
                 self.status.add_log("no se detecto voz")
                 self._return_to_idle()
                 return
 
-            if self._cancel_event.is_set():
-                return
-
             self.status.add_log(f"tu: {text}")
             self._set_state(State.THINKING)
             self.status.add_log("procesando respuesta...")
 
-            with ThreadPoolExecutor(max_workers=1) as pool:
-                future = pool.submit(
-                    llm_ask, text,
-                    api_key=self._groq_api_key, model=self._llm_model)
-                try:
-                    reply = future.result(timeout=25)
-                except TimeoutError:
-                    self.status.add_log("LLM cancelado (timeout)")
-                    return
+            reply = llm_ask(text, api_key=self._groq_api_key,
+                            model=self._llm_model, timeout=20)
 
             if self._cancel_event.is_set():
                 return
@@ -254,7 +242,10 @@ class Orchestrator:
                     self._playback.stop()
         except Exception:
             pass
-        self._cancel_event.set()
-        self._return_to_idle()
-        self.status.add_log("cancelado")
-        self.status.flash_cancel()
+        try:
+            self._cancel_event.set()
+            self._return_to_idle()
+            self.status.add_log("cancelado")
+            self.status.flash_cancel()
+        except Exception:
+            pass

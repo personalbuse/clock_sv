@@ -43,7 +43,7 @@ class StatusWidget(Static):
 
     def flash_cancel(self) -> None:
         if self._timer:
-            self._timer.remove()
+            self._timer.stop()
             self._timer = None
         self._flash = True
         self.set_timer(1.0, self._end_flash)
@@ -55,7 +55,7 @@ class StatusWidget(Static):
 
     def _restart_timer(self) -> None:
         if self._timer:
-            self._timer.remove()
+            self._timer.stop()
             self._timer = None
         _, _, frames, interval = STATUS_MAP.get(self.state, STATUS_MAP["IDLE"])
         if len(frames) > 1 and interval > 0:
