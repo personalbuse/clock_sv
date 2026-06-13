@@ -78,18 +78,9 @@ class Orchestrator:
 
     def start(self) -> None:
         self.status.set_state("IDLE")
-        self.status.add_log("iniciando...")
         ok = self.capture.start(self._on_audio_chunk)
         if not ok:
-            self.status.add_log(
-                f"audio no disponible: {self.capture.error}")
-            self.status.add_log("modo TUI solo visual (sin microfono)")
-        else:
-            hint = ""
-            if self.wakeword:
-                hint = "palabra clave, "
-            self.status.add_log(
-                f"esperando {hint}tecla 'x' (PTT) o 'c' (cancelar)")
+            self.status.set_state("ERROR")
 
     def stop(self) -> None:
         self.capture.stop()
@@ -112,7 +103,6 @@ class Orchestrator:
             return
         if self.wakeword.feed(chunk):
             self._set_state(State.LISTENING)
-            self.status.add_log("palabra clave detectada, escuchando...")
             self._audio_buffer = []
             self._speech_frames = 0
             self._silence_frames = 0
@@ -130,7 +120,6 @@ class Orchestrator:
 
     def _on_command_ready(self) -> None:
         self._set_state(State.TRANSCRIBING)
-        self.status.add_log("silencio detectado, transcribiendo...")
         threading.Thread(target=self._process_pipeline, daemon=True).start()
 
     def _audio_bytes(self) -> bytes:
@@ -167,16 +156,13 @@ class Orchestrator:
                 audio_wav, api_key=self._groq_api_key,
                 model=self._stt_model)
             if not text:
-                self.status.add_log("no se detecto voz")
                 self._return_to_idle()
                 return
 
             if self._cancel_event.is_set():
                 return
 
-            self.status.add_log(f"tu: {text}")
             self._set_state(State.THINKING)
-            self.status.add_log("procesando respuesta...")
 
             reply = llm_ask(text, api_key=self._groq_api_key,
                             model=self._llm_model)
@@ -184,10 +170,7 @@ class Orchestrator:
             if self._cancel_event.is_set():
                 return
 
-            self.status.add_log(f"asistente: {reply}")
-
             self._set_state(State.SPEAKING)
-            self.status.add_log("hablando...")
 
             if self._tts_provider == "piper":
                 from src.services.tts_piper import PiperTTS
@@ -213,8 +196,8 @@ class Orchestrator:
                 playback._playback_thread.join(timeout=30)
                 if playback._playback_thread.is_alive():
                     playback.stop()
-        except Exception as e:
-            self.status.add_log(f"error: {e}")
+        except Exception:
+            pass
         finally:
             self._return_to_idle()
 
@@ -223,10 +206,6 @@ class Orchestrator:
         self._speech_frames = 0
         self._silence_frames = 0
         self._set_state(State.IDLE)
-        hint = ""
-        if self.wakeword:
-            hint = "palabra clave, "
-        self.status.add_log(f"esperando {hint}tecla 'x' (PTT) o 'c' (cancelar)")
 
     def on_event(self, event: AssistantEvent, data=None) -> None:
         pass
@@ -234,7 +213,6 @@ class Orchestrator:
     def press_ptt(self) -> None:
         if self.state == State.IDLE:
             self._set_state(State.LISTENING)
-            self.status.add_log("Push-to-Talk activado")
             self._audio_buffer = []
             self._silence_frames = 0
 
@@ -249,8 +227,5 @@ class Orchestrator:
                 return
             if self.state == State.SPEAKING and self._playback:
                 self._playback.stop()
-                self.status.add_log("reproducción cancelada")
-            elif self.state != State.IDLE:
-                self.status.add_log("cancelado")
         self._cancel_event.set()
         self._return_to_idle()

@@ -1,43 +1,49 @@
 from rich.text import Text
 from textual.widgets import Static
 
-from src.tui.gradient import apply_gradient
-
-WHITE = (255, 255, 255)
-GRAY = (136, 136, 136)
-
+STATUS_MAP = {
+    "IDLE":         ("INACTIVO",     "#666666", ["⬤"], 0),
+    "LISTENING":    ("ESCUCHANDO",   "#00ff88", ["◐","◓","◑","◒"], 0.25),
+    "TRANSCRIBING": ("TRANSCRIBIENDO","#ffcc00", ["◐","◓","◑","◒"], 0.12),
+    "THINKING":     ("PENSANDO",     "#4488ff", ["◰","◳","◲","◱"], 0.15),
+    "SPEAKING":     ("HABLANDO",     "#ffffff", ["◉","◎","◉","◎"], 0.2),
+}
 
 class StatusWidget(Static):
     def on_mount(self) -> None:
         self.state = "IDLE"
-        self.log_lines = []
+        self._frame = 0
+        self._timer = None
         self.update_display()
 
     def set_state(self, state: str) -> None:
         self.state = state
+        self._frame = 0
+        self._restart_timer()
         self.update_display()
 
-    def add_log(self, message: str) -> None:
-        self.log_lines.append(message)
-        if len(self.log_lines) > 10:
-            self.log_lines.pop(0)
+    def add_log(self, _message: str) -> None:
+        pass
+
+    def _restart_timer(self) -> None:
+        if self._timer:
+            self._timer.cancel()
+            self._timer = None
+        _, _, frames, interval = STATUS_MAP.get(self.state, STATUS_MAP["IDLE"])
+        if len(frames) > 1 and interval > 0:
+            self._timer = self.set_interval(interval, self._tick)
+
+    def _tick(self) -> None:
+        self._frame += 1
         self.update_display()
 
     def update_display(self) -> None:
-        state_text = apply_gradient(f"[{self.state}]", *WHITE, *GRAY)
+        label, color, frames, _ = STATUS_MAP.get(self.state, STATUS_MAP["IDLE"])
+        frame_idx = self._frame % len(frames)
+        dot = frames[frame_idx]
 
         content = Text()
-        content.append(state_text)
-        content.append("\n")
-
-        # Show control hints in IDLE state
-        if self.state == "IDLE":
-            hints = apply_gradient("(X=PTT  C=Cancelar)", *GRAY, *WHITE)
-            content.append(hints)
-            content.append("\n")
-
-        for line in self.log_lines[-5:]:
-            content.append(apply_gradient(line, *GRAY, *WHITE))
-            content.append("\n")
-
+        content.append(Text(dot, style=color))
+        content.append(" ")
+        content.append(Text(label, style=f"bold {color}"))
         self.update(content)
