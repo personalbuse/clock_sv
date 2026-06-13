@@ -23,7 +23,7 @@ class AssistantApp(App):
         with Container(id="main"):
             yield ClockWidget()
             yield WeatherWidget()
-        yield StatusWidget()
+            yield StatusWidget()
 
     def on_mount(self) -> None:
         self._ensure_pulseaudio()

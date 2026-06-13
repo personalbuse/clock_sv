@@ -222,10 +222,11 @@ class Orchestrator:
 
     def cancel(self) -> None:
         """Cancel current operation and return to IDLE."""
-        with self._lock:
-            if self.state == State.IDLE:
-                return
-            if self.state == State.SPEAKING and self._playback:
-                self._playback.stop()
+        try:
+            with self._lock:
+                if self.state == State.SPEAKING and self._playback:
+                    self._playback.stop()
+        except Exception:
+            pass
         self._cancel_event.set()
         self._return_to_idle()

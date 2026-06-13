@@ -1,12 +1,16 @@
 from rich.text import Text
 from textual.widgets import Static
 
+FILL  = [" █ ", "███", " █ "]
+HALF  = [" ▓ ", "▓▓▓", " ▓ "]
+EMPTY = [" ░ ", "░█░", " ░ "]
+
 STATUS_MAP = {
-    "IDLE":         ("INACTIVO",     "#666666", ["⬤"], 0),
-    "LISTENING":    ("ESCUCHANDO",   "#00ff88", ["◐","◓","◑","◒"], 0.25),
-    "TRANSCRIBING": ("TRANSCRIBIENDO","#ffcc00", ["◐","◓","◑","◒"], 0.12),
-    "THINKING":     ("PENSANDO",     "#4488ff", ["◰","◳","◲","◱"], 0.15),
-    "SPEAKING":     ("HABLANDO",     "#ffffff", ["◉","◎","◉","◎"], 0.2),
+    "IDLE":         ("INACTIVO",      "#666666", [FILL],               0),
+    "LISTENING":    ("ESCUCHANDO",    "#00ff88", [FILL, EMPTY],        0.3),
+    "TRANSCRIBING": ("TRANSCRIBIENDO","#ffcc00", [FILL, HALF, EMPTY, HALF], 0.15),
+    "THINKING":     ("PENSANDO",      "#4488ff", [FILL, HALF, EMPTY, HALF], 0.2),
+    "SPEAKING":     ("HABLANDO",      "#ffffff", [FILL, EMPTY],        0.25),
 }
 
 class StatusWidget(Static):
@@ -27,7 +31,7 @@ class StatusWidget(Static):
 
     def _restart_timer(self) -> None:
         if self._timer:
-            self._timer.cancel()
+            self._timer.remove()
             self._timer = None
         _, _, frames, interval = STATUS_MAP.get(self.state, STATUS_MAP["IDLE"])
         if len(frames) > 1 and interval > 0:
@@ -40,10 +44,14 @@ class StatusWidget(Static):
     def update_display(self) -> None:
         label, color, frames, _ = STATUS_MAP.get(self.state, STATUS_MAP["IDLE"])
         frame_idx = self._frame % len(frames)
-        dot = frames[frame_idx]
+        shape = frames[frame_idx]
 
         content = Text()
-        content.append(Text(dot, style=color))
-        content.append(" ")
-        content.append(Text(label, style=f"bold {color}"))
+        for i, line in enumerate(shape):
+            if content:
+                content.append("\n")
+            content.append(Text(line, style=color))
+            if i == 1:
+                content.append(" ")
+                content.append(Text(label, style=f"bold {color}"))
         self.update(content)
