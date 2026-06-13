@@ -1,5 +1,6 @@
 import io
 import threading
+from concurrent.futures import ThreadPoolExecutor, TimeoutError
 
 from enum import Enum, auto
 
@@ -78,9 +79,13 @@ class Orchestrator:
 
     def start(self) -> None:
         self.status.set_state("IDLE")
+        self.status.add_log("iniciando...")
         ok = self.capture.start(self._on_audio_chunk)
         if not ok:
             self.status.set_state("ERROR")
+            self.status.add_log(f"error audio: {self.capture.error}")
+        else:
+            self.status.add_log("listo, esperando tecla X (PTT) o C")
 
     def stop(self) -> None:
         self.capture.stop()
@@ -120,6 +125,7 @@ class Orchestrator:
 
     def _on_command_ready(self) -> None:
         self._set_state(State.TRANSCRIBING)
+        self.status.add_log("transcribiendo...")
         threading.Thread(target=self._process_pipeline, daemon=True).start()
 
     def _audio_bytes(self) -> bytes:
@@ -152,25 +158,45 @@ class Orchestrator:
             from src.audio.playback import AudioPlayback
 
             audio_wav = self._audio_bytes()
-            text = stt_transcribe(
-                audio_wav, api_key=self._groq_api_key,
-                model=self._stt_model)
+
+            with ThreadPoolExecutor(max_workers=1) as pool:
+                future = pool.submit(
+                    stt_transcribe, audio_wav,
+                    api_key=self._groq_api_key, model=self._stt_model)
+                try:
+                    text = future.result(timeout=15)
+                except TimeoutError:
+                    self.status.add_log("transcripción cancelada (timeout)")
+                    return
+
             if not text:
+                self.status.add_log("no se detecto voz")
                 self._return_to_idle()
                 return
 
             if self._cancel_event.is_set():
                 return
 
+            self.status.add_log(f"tu: {text}")
             self._set_state(State.THINKING)
+            self.status.add_log("procesando respuesta...")
 
-            reply = llm_ask(text, api_key=self._groq_api_key,
-                            model=self._llm_model)
+            with ThreadPoolExecutor(max_workers=1) as pool:
+                future = pool.submit(
+                    llm_ask, text,
+                    api_key=self._groq_api_key, model=self._llm_model)
+                try:
+                    reply = future.result(timeout=25)
+                except TimeoutError:
+                    self.status.add_log("LLM cancelado (timeout)")
+                    return
 
             if self._cancel_event.is_set():
                 return
 
+            self.status.add_log(f"asistente: {reply}")
             self._set_state(State.SPEAKING)
+            self.status.add_log("hablando...")
 
             if self._tts_provider == "piper":
                 from src.services.tts_piper import PiperTTS
@@ -191,13 +217,12 @@ class Orchestrator:
             self._playback = playback
             self._set_state(State.SPEAKING)
             playback.play_async(audio_data)
-            # Wait for playback with timeout
             if playback._playback_thread:
                 playback._playback_thread.join(timeout=30)
                 if playback._playback_thread.is_alive():
                     playback.stop()
-        except Exception:
-            pass
+        except Exception as e:
+            self.status.add_log(f"error: {e}")
         finally:
             self._return_to_idle()
 
@@ -213,6 +238,7 @@ class Orchestrator:
     def press_ptt(self) -> None:
         if self.state == State.IDLE:
             self._set_state(State.LISTENING)
+            self.status.add_log("escuchando...")
             self._audio_buffer = []
             self._silence_frames = 0
 
@@ -230,3 +256,5 @@ class Orchestrator:
             pass
         self._cancel_event.set()
         self._return_to_idle()
+        self.status.add_log("cancelado")
+        self.status.flash_cancel()

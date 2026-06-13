@@ -11,6 +11,10 @@ from src.tui.widgets.weather_widget import WeatherWidget
 from src.tui.widgets.status_widget import StatusWidget
 
 
+def lcfirst(s: str) -> str:
+    return s[0].lower() + s[1:] if s else s
+
+
 class AssistantApp(App):
     CSS_PATH = "styles.tcss"
 
@@ -62,3 +66,6 @@ class AssistantApp(App):
     def key_c(self) -> None:
         if self.orchestrator:
             self.orchestrator.cancel()
+
+    def key_l(self) -> None:
+        self.query_one(StatusWidget).toggle_logs()
