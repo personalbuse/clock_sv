@@ -2,17 +2,12 @@ from textual.app import App, ComposeResult
 from textual.containers import Container
 
 from src.core.orchestrator import Orchestrator
-import locale
 import subprocess
 
 from src.utils.config import load_config
 from src.tui.widgets.clock_widget import ClockWidget
 from src.tui.widgets.weather_widget import WeatherWidget
 from src.tui.widgets.status_widget import StatusWidget
-
-
-def lcfirst(s: str) -> str:
-    return s[0].lower() + s[1:] if s else s
 
 
 class AssistantApp(App):
