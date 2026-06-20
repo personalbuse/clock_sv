@@ -25,7 +25,7 @@ def _extract_inline_query(text: str) -> str | None:
     return None
 
 
-def ask(prompt: str, endpoint: str = "http://localhost:11434/v1",
+def ask(prompt: str, endpoint: str = "http://localhost:11434",
         model: str = "qwen2.5:3b", temperature: float = 0.7,
         max_tokens: int = 256, timeout: int = 30) -> str:
     messages = [
@@ -39,22 +39,23 @@ def ask(prompt: str, endpoint: str = "http://localhost:11434/v1",
             body = {
                 "model": model,
                 "messages": messages,
-                "temperature": temperature,
-                "max_tokens": max_tokens,
                 "stream": False,
+                "options": {
+                    "temperature": temperature,
+                    "num_predict": max_tokens,
+                },
             }
             if not searched:
                 body["tools"] = [TOOL_DEF]
 
             resp = requests.post(
-                f"{endpoint}/chat/completions",
+                f"{endpoint}/api/chat",
                 json=body,
                 timeout=timeout,
             )
             resp.raise_for_status()
             data = resp.json()
-            choice = data["choices"][0]
-            msg = choice["message"]
+            msg = data["message"]
             content = (msg.get("content") or "").strip()
 
             if not searched:
@@ -87,30 +88,21 @@ def ask(prompt: str, endpoint: str = "http://localhost:11434/v1",
                     "content": content,
                     "tool_calls": [
                         {
-                            "id": tc.get("id", f"call_{i}"),
-                            "type": "function",
                             "function": {
                                 "name": tc["function"]["name"],
-                                "arguments": (
-                                    json.dumps(tc["function"]["arguments"])
-                                    if isinstance(tc["function"]["arguments"], dict)
-                                    else tc["function"]["arguments"]
-                                ),
-                            },
+                                "arguments": tc["function"]["arguments"],
+                            }
                         }
-                        for i, tc in enumerate(tool_calls)
+                        for tc in tool_calls
                     ],
                 })
 
                 for tc in tool_calls:
                     if tc["function"]["name"] == "web_search":
                         args = tc["function"]["arguments"]
-                        if isinstance(args, str):
-                            args = json.loads(args)
                         result = search(args["query"])
                         messages.append({
                             "role": "tool",
-                            "tool_call_id": tc.get("id", "call_0"),
                             "content": result,
                         })
                 continue
@@ -125,14 +117,16 @@ def ask(prompt: str, endpoint: str = "http://localhost:11434/v1",
         body = {
             "model": model,
             "messages": messages,
-            "temperature": temperature,
-            "max_tokens": max_tokens,
             "stream": False,
+            "options": {
+                "temperature": temperature,
+                "num_predict": max_tokens,
+            },
         }
-        resp = requests.post(f"{endpoint}/chat/completions", json=body, timeout=timeout)
+        resp = requests.post(f"{endpoint}/api/chat", json=body, timeout=timeout)
         resp.raise_for_status()
         data = resp.json()
-        result = (data["choices"][0]["message"].get("content") or "").strip()
+        result = (data["message"].get("content") or "").strip()
         return result or "No tengo informacion suficiente para responder."
     except Exception as e:
         raise RuntimeError(f"Ollama LLM failed: {e}") from e

@@ -27,7 +27,7 @@ stt:
 llm:
   provider: ollama
   ollama:
-    endpoint: http://localhost:11434/v1
+    endpoint: http://localhost:11434
     model: qwen2.5:3b
   groq:
     model: llama-3.1-8b-instant
