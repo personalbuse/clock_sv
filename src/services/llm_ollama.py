@@ -27,7 +27,7 @@ def _extract_inline_query(text: str) -> str | None:
 
 def ask(prompt: str, endpoint: str = "http://localhost:11434",
         model: str = "qwen2.5:3b", temperature: float = 0.7,
-        max_tokens: int = 256, timeout: int = 30) -> str:
+        max_tokens: int = 256, timeout: int = 120) -> str:
     messages = [
         {"role": "system", "content": SYSTEM_PROMPT},
         {"role": "user", "content": prompt},
@@ -40,6 +40,7 @@ def ask(prompt: str, endpoint: str = "http://localhost:11434",
                 "model": model,
                 "messages": messages,
                 "stream": False,
+                "keep_alive": -1,
                 "options": {
                     "temperature": temperature,
                     "num_predict": max_tokens,

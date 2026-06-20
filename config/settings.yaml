@@ -31,7 +31,7 @@ llm:
     model: qwen2.5:3b
   groq:
     model: llama-3.1-8b-instant
-  timeout: 15
+  timeout: 120
   temperature: 0.7
   max_tokens: 256
 
