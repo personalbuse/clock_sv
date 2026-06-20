@@ -1,6 +1,6 @@
 import io
+import struct
 import threading
-
 from enum import Enum, auto
 
 import numpy as np
@@ -8,7 +8,10 @@ import numpy as np
 from src.audio.capture import AudioCapture
 from src.audio.vad import VAD
 from src.audio.wakeword import WakeWordDetector
+from src.commands.router import dispatch as cmd_dispatch
+from src.core.conversation import ConversationManager
 from src.core.events import AssistantEvent
+from src.core.timers import TimerManager
 from src.tui.widgets.status_widget import StatusWidget
 
 
@@ -59,26 +62,64 @@ class Orchestrator:
         self._speech_frames = 0
         self._silence_frames = 0
         self._silence_timeout = 30
+        self._max_listen_frames = 150
 
         self._groq_api_key = config.get("groq_api_key", "")
         self._google_api_key = config.get("google_api_key", "")
-        self._stt_model = config.get("stt", {}).get(
-            "model", "whisper-large-v3-turbo")
-        self._llm_model = config.get("llm", {}).get(
-            "model", "llama-3.1-8b-instant")
+        self._system_prompt = config.get("system_prompt",
+                                          "Eres un asistente de voz servidor inteligente. Responde siempre en espanol, de forma breve y directa.")
+
+        llm_cfg = config.get("llm", {})
+        stt_cfg = config.get("stt", {})
+        self._llm_provider = llm_cfg.get("provider", "ollama")
+        self._stt_provider = stt_cfg.get("provider", "local")
+        self._llm_model = llm_cfg.get("groq", {}).get("model", "llama-3.1-8b-instant")
+        self._stt_model = stt_cfg.get("groq", {}).get("model", "whisper-large-v3-turbo")
+        self._llm_temp = llm_cfg.get("temperature", 0.7)
+        self._llm_max_tokens = llm_cfg.get("max_tokens", 512)
 
         tts_config = config.get("tts", {})
         self._tts_provider = tts_config.get("provider", "piper")
-        self._tts_model = tts_config.get("gemini", {}).get(
-            "model", "gemini-2.5-flash-preview-tts")
-        self._tts_voice = tts_config.get("gemini", {}).get(
-            "voice", "sadachbia")
-        self._tts_piper_model_path = tts_config.get("piper", {}).get(
-            "model_path", "models/piper/es_ES-carlfm-x_low.onnx")
+        self._tts_model = tts_config.get("gemini", {}).get("model", "gemini-2.5-flash-preview-tts")
+        self._tts_voice = tts_config.get("gemini", {}).get("voice", "sadachbia")
+        self._tts_piper_model_path = tts_config.get("piper", {}).get("model_path", "models/piper/es_ES-carlfm-x_low.onnx")
+
+        self.timers = TimerManager()
+        self.timers.set_callback(self._on_timer_expire)
+
+        self.conversations = ConversationManager()
+
+    def set_timer_widget(self, widget) -> None:
+        self._timer_widget = widget
+
+    def set_chat_widget(self, widget) -> None:
+        self._chat_widget = widget
+        if widget:
+            widget.set_manager(self.conversations)
+
+    def _on_timer_expire(self, timer) -> None:
+        self.status.add_log(f"timer expirado: {timer.label}")
+        self._play_notification()
+
+    def _play_notification(self) -> None:
+        try:
+            duration = 0.5
+            sample_rate = 16000
+            t = np.linspace(0, duration, int(sample_rate * duration), False)
+            tone = np.sin(2 * np.pi * 880 * t) * 0.3
+            tone[:int(sample_rate * 0.05)] *= np.linspace(0, 1, int(sample_rate * 0.05))
+            tone[-int(sample_rate * 0.05):] *= np.linspace(1, 0, int(sample_rate * 0.05))
+            audio = (tone * 32767).astype(np.int16).tobytes()
+            from src.audio.playback import AudioPlayback
+            p = AudioPlayback(sample_rate=sample_rate, volume_gain=1.0)
+            p.play_blocking(audio)
+        except Exception:
+            pass
 
     def start(self) -> None:
         self.status.set_state("IDLE")
         self.status.add_log("iniciando...")
+        self.timers.start()
         ok = self.capture.start(self._on_audio_chunk)
         if not ok:
             self.status.set_state("ERROR")
@@ -88,6 +129,7 @@ class Orchestrator:
 
     def stop(self) -> None:
         self.capture.stop()
+        self.timers.stop()
 
     def _set_state(self, new_state: State) -> None:
         with self._lock:
@@ -118,8 +160,8 @@ class Orchestrator:
             self._silence_frames = 0
         else:
             self._silence_frames += 1
-
-        if self._silence_frames > self._silence_timeout:
+        total_frames = self._speech_frames + self._silence_frames
+        if self._silence_frames > self._silence_timeout or total_frames > self._max_listen_frames:
             self._on_command_ready()
 
     def _on_command_ready(self) -> None:
@@ -131,23 +173,18 @@ class Orchestrator:
 
     def _audio_bytes(self) -> bytes:
         raw = b"".join(self._audio_buffer)
-        import struct
         sample_rate = 16000
-        duration = len(raw) // (sample_rate * 2)
-        if duration < 1:
-            duration = 1
         data_size = len(raw)
         wav_header = (
-            b"RIFF" +
-            struct.pack("<I", 36 + data_size) +
-            b"WAVE" +
-            b"fmt " +
-            struct.pack("<I", 16) +
-            struct.pack("<HHIIHH", 1, 1, sample_rate,
-                         sample_rate * 2, 2, 16) +
-            b"data" +
-            struct.pack("<I", data_size) +
-            raw
+            b"RIFF"
+            + struct.pack("<I", 36 + data_size)
+            + b"WAVE"
+            + b"fmt "
+            + struct.pack("<I", 16)
+            + struct.pack("<HHIIHH", 1, 1, sample_rate, sample_rate * 2, 2, 16)
+            + b"data"
+            + struct.pack("<I", data_size)
+            + raw
         )
         return wav_header
 
@@ -155,17 +192,25 @@ class Orchestrator:
         try:
             self._cancel_event.clear()
 
-            if self._cancel_event.is_set():
-                return
-
-            from src.services.stt_groq import transcribe as stt_transcribe
-            from src.services.llm_groq import ask as llm_ask
             from src.audio.playback import AudioPlayback
 
             audio_wav = self._audio_bytes()
-            text = stt_transcribe(
-                audio_wav, api_key=self._groq_api_key,
-                model=self._stt_model, timeout=10)
+
+            if self._stt_provider == "local":
+                from src.services.stt_local import transcribe as stt_transcribe
+                local_cfg = self.config.get("stt", {}).get("local", {})
+                text = stt_transcribe(
+                    audio_wav,
+                    model_name=local_cfg.get("model", "base"),
+                    device=local_cfg.get("device", "cpu"),
+                    compute_type=local_cfg.get("compute_type", "int8"),
+                    timeout=self.config.get("stt", {}).get("timeout", 10),
+                )
+            else:
+                from src.services.stt_groq import transcribe as stt_transcribe
+                text = stt_transcribe(
+                    audio_wav, api_key=self._groq_api_key,
+                    model=self._stt_model, timeout=10)
 
             if self._cancel_event.is_set():
                 return
@@ -176,52 +221,97 @@ class Orchestrator:
                 return
 
             self.status.add_log(f"tu: {text}")
+            self.conversations.add_message("user", text)
+
+            cmd_result = cmd_dispatch(text)
+            if cmd_result:
+                reply, _ = cmd_result
+                if self._cancel_event.is_set():
+                    return
+                self.status.add_log(f"asistente: {reply}")
+                self._tts_and_speak(reply)
+                return
+
+            timer_result = self.timers.parse_command(text)
+            if timer_result:
+                reply, _ = timer_result
+                if self._cancel_event.is_set():
+                    return
+                self.status.add_log(f"asistente: {reply}")
+                self._tts_and_speak(reply)
+                if self._timer_widget:
+                    self._timer_widget.set_timers(self.timers.active_timers)
+                return
+
             self._set_state(State.THINKING)
             self.status.add_log("procesando respuesta...")
 
-            reply = llm_ask(text, api_key=self._groq_api_key,
-                            model=self._llm_model, timeout=20)
+            ctx = self.conversations.get_llm_context(self._system_prompt)
+            ctx.append({"role": "user", "content": text})
+
+            llm_cfg = self.config.get("llm", {})
+            if self._llm_provider == "ollama":
+                from src.services.llm_ollama import ask as llm_ask
+                ollama_cfg = llm_cfg.get("ollama", {})
+                reply = llm_ask(text,
+                    endpoint=ollama_cfg.get("endpoint", "http://localhost:11434/v1"),
+                    model=ollama_cfg.get("model", "qwen2.5:3b"),
+                    temperature=llm_cfg.get("temperature", 0.7),
+                    max_tokens=llm_cfg.get("max_tokens", 512),
+                    timeout=llm_cfg.get("timeout", 15))
+            else:
+                from src.services.llm_groq import ask as llm_ask
+                reply = llm_ask(text, api_key=self._groq_api_key,
+                                model=self._llm_model, timeout=20)
 
             if self._cancel_event.is_set():
                 return
 
+            self.conversations.add_message("assistant", reply)
             self.status.add_log(f"asistente: {reply}")
-            self._set_state(State.SPEAKING)
-            self.status.add_log("hablando...")
+            self._tts_and_speak(reply)
 
-            if self._tts_provider == "piper":
-                from src.services.tts_piper import PiperTTS
-                tts = PiperTTS(self._tts_piper_model_path)
-                audio_data = tts.synthesize(reply)
-                sample_rate = tts.sample_rate
-            else:
-                from src.services.tts_gemini import synthesize as tts_synth
-                audio_data = tts_synth(
-                    reply, api_key=self._google_api_key,
-                    model=self._tts_model, voice=self._tts_voice)
-                sample_rate = 24000
-
-            playback = AudioPlayback(
-                sample_rate=sample_rate,
-                volume_gain=self.config.get("audio", {}).get("volume_gain", 1.0),
-            )
-            self._playback = playback
-            self._set_state(State.SPEAKING)
-            playback.play_async(audio_data)
-            if playback._playback_thread:
-                playback._playback_thread.join(timeout=30)
-                if playback._playback_thread.is_alive():
-                    playback.stop()
         except Exception as e:
             self.status.add_log(f"error: {e}")
         finally:
             self._return_to_idle()
+
+    def _tts_and_speak(self, reply: str) -> None:
+        from src.audio.playback import AudioPlayback
+        self._set_state(State.SPEAKING)
+        self.status.add_log("hablando...")
+
+        if self._tts_provider == "piper":
+            from src.services.tts_piper import PiperTTS
+            tts = PiperTTS(self._tts_piper_model_path)
+            audio_data = tts.synthesize(reply)
+            sample_rate = tts.sample_rate
+        else:
+            from src.services.tts_gemini import synthesize as tts_synth
+            audio_data = tts_synth(
+                reply, api_key=self._google_api_key,
+                model=self._tts_model, voice=self._tts_voice)
+            sample_rate = 24000
+
+        playback = AudioPlayback(
+            sample_rate=sample_rate,
+            volume_gain=self.config.get("audio", {}).get("volume_gain", 1.0),
+        )
+        self._playback = playback
+        self._set_state(State.SPEAKING)
+        playback.play_async(audio_data)
+        if playback._playback_thread:
+            playback._playback_thread.join(timeout=30)
+            if playback._playback_thread.is_alive():
+                playback.stop()
 
     def _return_to_idle(self) -> None:
         self._audio_buffer = []
         self._speech_frames = 0
         self._silence_frames = 0
         self._set_state(State.IDLE)
+        if self._timer_widget:
+            self._timer_widget.set_timers(self.timers.active_timers)
 
     def on_event(self, event: AssistantEvent, data=None) -> None:
         pass
@@ -231,14 +321,19 @@ class Orchestrator:
             self._set_state(State.LISTENING)
             self.status.add_log("escuchando...")
             self._audio_buffer = []
+            self._speech_frames = 0
             self._silence_frames = 0
 
     def release_ptt(self) -> None:
-        if self.state == State.LISTENING and len(self._audio_buffer) > 0:
-            self._on_command_ready()
+        if self.state == State.LISTENING:
+            if len(self._audio_buffer) > 0:
+                self._on_command_ready()
+            else:
+                self._cancel_event.set()
+                self._return_to_idle()
+                self.status.add_log("cancelado")
 
     def cancel(self) -> None:
-        """Cancel current operation and return to IDLE."""
         try:
             with self._lock:
                 if self.state == State.SPEAKING and self._playback:

@@ -6,7 +6,7 @@
 
 # Deploy & Persistencia
 
-- Remote: dabuma@192.168.1.22, server headless
+- Remote: dabuma@192.168.1.25, server headless
 - Deploy: bash scripts/deploy.sh (rsync, sin systemd)
 - App se ejecuta manual: `cd clock_sv && ./run.sh` (wrapper que reinicia PulseAudio + app)
 - Persistencia: NO systemd service (manual)

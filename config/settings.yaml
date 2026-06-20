@@ -5,24 +5,32 @@ system_prompt: >
 
 language: es
 vad:
-  aggressiveness: 2
+  aggressiveness: 3
   frame_ms: 20
   sample_rate: 16000
 
 wake_word:
-  enabled: false
+  enabled: true
   word: servidor
-  threshold: 80
-  buffer_seconds: 2.0
-  model_size: tiny
-  compute_type: int8
+  threshold: 70
 
 stt:
-  model: whisper-large-v3-turbo
+  provider: local
+  local:
+    model: base
+    device: cpu
+    compute_type: int8
+  groq:
+    model: whisper-large-v3-turbo
   timeout: 10
 
 llm:
-  model: llama-3.1-8b-instant
+  provider: ollama
+  ollama:
+    endpoint: http://localhost:11434/v1
+    model: qwen2.5:3b
+  groq:
+    model: llama-3.1-8b-instant
   timeout: 15
   temperature: 0.7
   max_tokens: 256

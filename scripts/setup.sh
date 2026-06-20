@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-HOST="${1:-dabuma@192.168.1.22}"
+HOST="${1:-dabuma@192.168.1.25}"
 
 echo "=== Ensamblando service file ==="
 SVC_NAME="clock.service"

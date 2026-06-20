@@ -17,12 +17,14 @@ def load_config() -> dict[str, Any]:
     cfg["groq_api_key"] = os.getenv("GROQ_API_KEY", "")
     cfg["google_api_key"] = os.getenv("GOOGLE_API_KEY", "")
 
-    env_overrides = {
-        "llm": ("model", "LLM_MODEL"),
-        "stt": ("model", "STT_MODEL"),
-        "tts": ("model", "TTS_MODEL"),
-    }
-    for section, (key, env_var) in env_overrides.items():
+    env_overrides = [
+        ("llm", "provider", "LLM_PROVIDER"),
+        ("stt", "provider", "STT_PROVIDER"),
+        ("llm", "model", "LLM_MODEL"),
+        ("stt", "model", "STT_MODEL"),
+        ("tts", "model", "TTS_MODEL"),
+    ]
+    for section, key, env_var in env_overrides:
         val = os.getenv(env_var)
         if val:
             cfg[section][key] = val
