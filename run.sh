@@ -9,6 +9,11 @@ rm -rf /run/user/$(id -u)/pulse /tmp/pulse-* 2>/dev/null || true
 pulseaudio --start 2>&1 | grep -i "startup\|error" || true
 sleep 2
 
+# faster-whisper / ctranslate2: evitar bad_value(s) in fds_to_keep
+export TOKENIZERS_PARALLELISM=0
+export OMP_NUM_THREADS=1
+export MKL_NUM_THREADS=1
+
 echo "Starting Clock Voice Assistant..."
 export TZ=America/Bogota
 export PYTHONPATH=.
