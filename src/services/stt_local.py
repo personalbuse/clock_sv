@@ -6,16 +6,26 @@ from faster_whisper import WhisperModel
 
 _model = None
 _model_name = ""
+_warmed = False
+
+
+def warmup(model_name: str = "base", device: str = "cpu",
+           compute_type: str = "int8") -> None:
+    global _model, _model_name, _warmed
+    if _warmed:
+        return
+    _model = WhisperModel(model_name, device=device, compute_type=compute_type)
+    _model_name = model_name
+    _warmed = True
 
 
 def transcribe(audio_bytes: bytes, model_name: str = "base",
                device: str = "cpu", compute_type: str = "int8",
                timeout: int = 30) -> str:
-    global _model, _model_name
+    global _model, _model_name, _warmed
 
-    if _model is None or _model_name != model_name:
-        _model = WhisperModel(model_name, device=device, compute_type=compute_type)
-        _model_name = model_name
+    if not _warmed or _model_name != model_name:
+        warmup(model_name, device, compute_type)
 
     try:
         with io.BytesIO(audio_bytes) as buf:

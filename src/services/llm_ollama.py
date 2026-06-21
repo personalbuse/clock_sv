@@ -15,6 +15,23 @@ SYSTEM_PROMPT = (
 )
 
 
+def warmup(endpoint: str = "http://localhost:11434",
+           model: str = "qwen2.5:3b") -> None:
+    try:
+        requests.post(
+            f"{endpoint}/api/chat",
+            json={
+                "model": model,
+                "messages": [{"role": "user", "content": "hola"}],
+                "stream": False,
+                "keep_alive": -1,
+            },
+            timeout=120,
+        )
+    except Exception:
+        pass
+
+
 def _extract_inline_query(text: str) -> str | None:
     m = re.search(r'<web_search\s+query=["\']([^"\']+)["\']\s*/>', text)
     if m:

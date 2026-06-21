@@ -22,7 +22,7 @@ stt:
     compute_type: int8
   groq:
     model: whisper-large-v3-turbo
-  timeout: 10
+  timeout: 60
 
 llm:
   provider: ollama

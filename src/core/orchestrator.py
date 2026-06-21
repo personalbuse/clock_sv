@@ -97,6 +97,34 @@ class Orchestrator:
         if widget:
             widget.set_manager(self.conversations)
 
+    def _warmup_models(self) -> None:
+        self.status.add_log("precalentando modelos...")
+        if self._stt_provider == "local":
+            try:
+                from src.services.stt_local import warmup as stt_warmup
+                local_cfg = self.config.get("stt", {}).get("local", {})
+                self.status.add_log("cargando STT local (faster-whisper)...")
+                stt_warmup(
+                    model_name=local_cfg.get("model", "base"),
+                    device=local_cfg.get("device", "cpu"),
+                    compute_type=local_cfg.get("compute_type", "int8"),
+                )
+                self.status.add_log("STT local listo")
+            except Exception as e:
+                self.status.add_log(f"error STT warmup: {e}")
+        if self._llm_provider == "ollama":
+            try:
+                from src.services.llm_ollama import warmup as llm_warmup
+                llm_cfg = self.config.get("llm", {}).get("ollama", {})
+                self.status.add_log("precalentando LLM (Ollama)...")
+                llm_warmup(
+                    endpoint=llm_cfg.get("endpoint", "http://localhost:11434"),
+                    model=llm_cfg.get("model", "qwen2.5:3b"),
+                )
+                self.status.add_log("LLM local listo")
+            except Exception as e:
+                self.status.add_log(f"error LLM warmup: {e}")
+
     def _on_timer_expire(self, timer) -> None:
         self.status.add_log(f"timer expirado: {timer.label}")
         self._play_notification()
@@ -120,6 +148,7 @@ class Orchestrator:
         self.status.set_state("IDLE")
         self.status.add_log("iniciando...")
         self.timers.start()
+        self._warmup_models()
         ok = self.capture.start(self._on_audio_chunk)
         if not ok:
             self.status.set_state("ERROR")
