@@ -1,3 +1,7 @@
+import os
+
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
+
 import io
 import wave
 
@@ -14,8 +18,6 @@ def warmup(model_name: str = "base", device: str = "cpu",
     global _model, _model_name, _warmed
     if _warmed:
         return
-    import os
-    os.environ["TOKENIZERS_PARALLELISM"] = "false"
     _model = WhisperModel(model_name, device=device, compute_type=compute_type)
     _model_name = model_name
     _warmed = True
