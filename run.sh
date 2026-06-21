@@ -14,8 +14,16 @@ export TOKENIZERS_PARALLELISM=0
 export OMP_NUM_THREADS=1
 export MKL_NUM_THREADS=1
 
-echo "Starting Clock Voice Assistant..."
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+cd "$SCRIPT_DIR"
+
+# Activar virtualenv si existe
+if [ -f venv/bin/activate ]; then
+    source venv/bin/activate
+fi
+
 export TZ=America/Bogota
-export PYTHONPATH=.
-cd "$(dirname "$0")"
+export PYTHONPATH="$SCRIPT_DIR"
+
+echo "Starting Clock Voice Assistant..."
 python src/main.py
