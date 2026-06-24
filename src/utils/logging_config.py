@@ -1,5 +1,6 @@
 import logging
 import sys
+from pathlib import Path
 
 NOISY_LOGGERS = [
     "httpx", "urllib3", "requests", "huggingface_hub",
@@ -9,15 +10,24 @@ NOISY_LOGGERS = [
 ]
 
 
-def setup_logging(level: int = logging.INFO) -> None:
-    handler = logging.StreamHandler(sys.stdout)
-    handler.setFormatter(logging.Formatter(
+def setup_logging(level: int = logging.DEBUG) -> None:
+    root = logging.getLogger()
+    root.setLevel(level)
+
+    fmt = logging.Formatter(
+        "%(asctime)s [%(levelname)s] %(message)s",
+    )
+
+    fh = logging.FileHandler("clock_sv.log")
+    fh.setFormatter(fmt)
+    root.addHandler(fh)
+
+    sh = logging.StreamHandler(sys.stdout)
+    sh.setFormatter(logging.Formatter(
         "[%(asctime)s] %(levelname)s — %(message)s",
         datefmt="%H:%M:%S",
     ))
-    root = logging.getLogger()
-    root.setLevel(level)
-    root.addHandler(handler)
+    root.addHandler(sh)
 
     for name in NOISY_LOGGERS:
         logging.getLogger(name).setLevel(logging.WARNING)

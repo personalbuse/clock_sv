@@ -7,11 +7,6 @@ from enum import Enum, auto
 
 import numpy as np
 
-logging.basicConfig(
-    filename="clock_sv.log", level=logging.DEBUG,
-    format="%(asctime)s [%(levelname)s] %(message)s",
-)
-
 from src.audio.capture import AudioCapture
 from src.audio.vad import VAD
 from src.audio.wakeword import WakeWordDetector
@@ -385,17 +380,20 @@ class Orchestrator:
         self._set_state(State.IDLE)
         if self._timer_widget:
             self._timer_widget.set_timers(self.timers.active_timers)
+        self._try_announce_email()
 
     def on_event(self, event: AssistantEvent, data=None) -> None:
         pass
 
     def _on_email_alert(self, sender: str, summary: str) -> None:
+        self.status.add_log(f"email recibido: {sender}")
         with self._lock:
             self._pending_email_alerts.append((sender, summary))
+        self._try_announce_email()
 
     def _try_announce_email(self) -> None:
         with self._lock:
-            if self.state != State.IDLE:
+            if self.state not in (State.IDLE,):
                 return
             if not self._pending_email_alerts or self._announcing_email:
                 return
@@ -414,7 +412,8 @@ class Orchestrator:
                 text = f"Correo de {sender}. {summary}"
                 self._tts_and_speak(text)
         finally:
-            self._announcing_email = False
+            with self._lock:
+                self._announcing_email = False
             self._return_to_idle()
 
     def press_ptt(self) -> None:

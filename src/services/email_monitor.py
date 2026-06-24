@@ -63,6 +63,7 @@ class EmailMonitor:
             self._stop.wait(self._interval)
 
     def _check_email(self) -> None:
+        logging.info("email_monitor: checking INBOX...")
         mail = imaplib.IMAP4_SSL(self._server, self._port)
         mail.login(self._username, self._password)
         mail.select("INBOX")
@@ -72,6 +73,7 @@ class EmailMonitor:
             return
 
         num_ids = data[0].split()
+        logging.info("email_monitor: found %d unread", len(num_ids))
         checked = 0
         for raw_id in num_ids:
             if checked >= self._max_per_cycle:
