@@ -63,6 +63,13 @@ email:
   max_body_chars: 500
   max_emails_per_check: 5
   important_senders: []
+  important_keywords:
+    - urgente
+    - importante
+    - factura
+    - reunion
+    - presupuesto
+  evaluation_mode: "keywords"
   llm_model: "llama3.2:1b"
 
 audio:
