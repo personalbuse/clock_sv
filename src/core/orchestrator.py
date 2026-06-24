@@ -1,9 +1,16 @@
 import io
+import logging
 import struct
 import threading
+import traceback
 from enum import Enum, auto
 
 import numpy as np
+
+logging.basicConfig(
+    filename="clock_sv.log", level=logging.DEBUG,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+)
 
 from src.audio.capture import AudioCapture
 from src.audio.vad import VAD
@@ -12,6 +19,7 @@ from src.commands.router import dispatch as cmd_dispatch
 from src.core.conversation import ConversationManager
 from src.core.events import AssistantEvent
 from src.core.timers import TimerManager
+from src.services.email_monitor import EmailMonitor
 from src.tui.widgets.status_widget import StatusWidget
 
 
@@ -31,6 +39,7 @@ class Orchestrator:
         self._lock = threading.Lock()
         self._cancel_event = threading.Event()
         self._playback = None
+        self._timer_widget = None
 
         ac = config.get("audio", {})
         vc = config.get("vad", {})
@@ -89,6 +98,11 @@ class Orchestrator:
 
         self.conversations = ConversationManager()
 
+        self._email_monitor = EmailMonitor(config, self._on_email_alert)
+        self._pending_email_alerts: list[tuple[str, str]] = []
+        self._announcing_email = False
+        self._email_tick = 0
+
     def set_timer_widget(self, widget) -> None:
         self._timer_widget = widget
 
@@ -111,6 +125,8 @@ class Orchestrator:
                 )
                 self.status.add_log("STT local listo")
             except Exception as e:
+                tb = traceback.format_exc()
+                logging.error("STT warmup failed:\n%s", tb)
                 self.status.add_log(f"error STT warmup: {e}")
         if self._llm_provider == "ollama":
             try:
@@ -123,6 +139,8 @@ class Orchestrator:
                 )
                 self.status.add_log("LLM local listo")
             except Exception as e:
+                tb = traceback.format_exc()
+                logging.error("LLM warmup failed:\n%s", tb)
                 self.status.add_log(f"error LLM warmup: {e}")
 
     def _on_timer_expire(self, timer) -> None:
@@ -149,6 +167,7 @@ class Orchestrator:
         self.status.add_log("iniciando...")
         self.timers.start()
         self._warmup_models()
+        self._email_monitor.start()
         ok = self.capture.start(self._on_audio_chunk)
         if not ok:
             self.status.set_state("ERROR")
@@ -159,6 +178,7 @@ class Orchestrator:
     def stop(self) -> None:
         self.capture.stop()
         self.timers.stop()
+        self._email_monitor.stop()
 
     def _set_state(self, new_state: State) -> None:
         with self._lock:
@@ -172,6 +192,10 @@ class Orchestrator:
             self._listening_loop(chunk)
 
     def _idle_loop(self, chunk: bytes) -> None:
+        self._email_tick += 1
+        if self._email_tick >= 50:
+            self._email_tick = 0
+            self._try_announce_email()
         if not self.wakeword or not self.vad.is_speech_chunk(chunk):
             if self.wakeword:
                 self.wakeword.reset()
@@ -195,6 +219,7 @@ class Orchestrator:
 
     def _on_command_ready(self) -> None:
         if self._cancel_event.is_set():
+            self._return_to_idle()
             return
         self._set_state(State.TRANSCRIBING)
         self.status.add_log("transcribiendo...")
@@ -275,8 +300,26 @@ class Orchestrator:
             self._set_state(State.THINKING)
             self.status.add_log("procesando respuesta...")
 
+            # Busqueda web local (duckduckgo) antes de llamar al LLM
+            web_cfg = self.config.get("web_search", {})
+            web_search_enabled = web_cfg.get("enabled", True) and self._llm_provider == "groq"
+            search_context = ""
+            if web_search_enabled:
+                try:
+                    from src.services.web_search import search as web_search_fn
+                    self.status.add_log("buscando en web...")
+                    search_context = web_search_fn(text, max_results=web_cfg.get("max_results", 3))
+                    if search_context and "error" not in search_context.lower() and "no se encontraron" not in search_context.lower():
+                        self.status.add_log("resultados web obtenidos")
+                except Exception:
+                    search_context = ""
+
             ctx = self.conversations.get_llm_context(self._system_prompt)
-            ctx.append({"role": "user", "content": text})
+            if search_context:
+                enhanced = f"{text}\n\nInformacion actual de la web:\n{search_context}\n\nResponde basandote en esta informacion si es relevante, de lo contrario ignoralo."
+                ctx.append({"role": "user", "content": enhanced})
+            else:
+                ctx.append({"role": "user", "content": text})
 
             llm_cfg = self.config.get("llm", {})
             if self._llm_provider == "ollama":
@@ -290,7 +333,8 @@ class Orchestrator:
                     timeout=llm_cfg.get("timeout", 15))
             else:
                 from src.services.llm_groq import ask as llm_ask
-                reply = llm_ask(text, api_key=self._groq_api_key,
+                prompt = f"{text}\n\nInformacion actual de la web:\n{search_context}\n\nResponde basandote en esta informacion si es relevante, de lo contrario ignoralo." if search_context else text
+                reply = llm_ask(prompt, api_key=self._groq_api_key,
                                 model=self._llm_model, timeout=20)
 
             if self._cancel_event.is_set():
@@ -345,8 +389,37 @@ class Orchestrator:
     def on_event(self, event: AssistantEvent, data=None) -> None:
         pass
 
+    def _on_email_alert(self, sender: str, summary: str) -> None:
+        with self._lock:
+            self._pending_email_alerts.append((sender, summary))
+
+    def _try_announce_email(self) -> None:
+        with self._lock:
+            if self.state != State.IDLE:
+                return
+            if not self._pending_email_alerts or self._announcing_email:
+                return
+            self._announcing_email = True
+            self._set_state(State.SPEAKING)
+        self.status.add_log("anunciando correo...")
+        threading.Thread(target=self._announce_emails, daemon=True).start()
+
+    def _announce_emails(self) -> None:
+        try:
+            while True:
+                with self._lock:
+                    if not self._pending_email_alerts:
+                        break
+                    sender, summary = self._pending_email_alerts.pop(0)
+                text = f"Correo de {sender}. {summary}"
+                self._tts_and_speak(text)
+        finally:
+            self._announcing_email = False
+            self._return_to_idle()
+
     def press_ptt(self) -> None:
         if self.state == State.IDLE:
+            self._cancel_event.clear()
             self._set_state(State.LISTENING)
             self.status.add_log("escuchando...")
             self._audio_buffer = []

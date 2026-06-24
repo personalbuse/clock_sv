@@ -5,6 +5,7 @@ NOISY_LOGGERS = [
     "httpx", "urllib3", "requests", "huggingface_hub",
     "faster_whisper", "sounddevice", "google.genai",
     "groq", "httpcore", "openai",
+    "google.genai.models", "google",
 ]
 
 

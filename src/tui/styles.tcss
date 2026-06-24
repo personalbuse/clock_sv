@@ -6,7 +6,7 @@ Screen {
     layout: vertical;
     align: center middle;
     height: 1fr;
-    padding-top: 8;
+    padding-top: 4;
 }
 
 ClockWidget {
@@ -21,8 +21,22 @@ WeatherWidget {
     content-align: center middle;
 }
 
+TimerWidget {
+    width: 100%;
+    height: auto;
+    content-align: center middle;
+    margin-top: 0;
+}
+
 StatusWidget {
     width: 100%;
     height: 2;
     content-align: center middle;
+}
+
+ChatHistoryWidget {
+    width: 100%;
+    height: auto;
+    content-align: center middle;
+    dock: bottom;
 }

@@ -53,6 +53,16 @@ weather:
   lon: -72.6477
   interval_minutes: 15
 
+email:
+  enabled: false
+  imap_server: imap.gmail.com
+  imap_port: 993
+  username: ""
+  password: ""
+  check_interval_seconds: 30
+  max_body_chars: 500
+  max_emails_per_check: 5
+
 audio:
   device: default
   sample_rate: 16000

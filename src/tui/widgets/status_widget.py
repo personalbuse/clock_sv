@@ -1,3 +1,5 @@
+import threading
+
 from rich.text import Text
 from textual.widgets import Static
 
@@ -14,24 +16,30 @@ class StatusWidget(Static):
         self.state = "IDLE"
         self._logs: list[str] = []
         self._show_logs = False
-        self.update_display()
+        self._update_widget()
 
     def set_state(self, state: str) -> None:
         self.state = state
-        self.update_display()
+        self._schedule_update()
 
     def add_log(self, message: str) -> None:
         self._logs.append(message)
         if len(self._logs) > 15:
             self._logs.pop(0)
         if self._show_logs:
-            self.update_display()
+            self._schedule_update()
 
     def toggle_logs(self) -> None:
         self._show_logs = not self._show_logs
-        self.update_display()
+        self._schedule_update()
 
-    def update_display(self) -> None:
+    def _schedule_update(self) -> None:
+        if threading.current_thread() is threading.main_thread():
+            self._update_widget()
+        else:
+            self.app.call_from_thread(self._update_widget)
+
+    def _update_widget(self) -> None:
         label, color = STATUS_MAP.get(self.state, STATUS_MAP["IDLE"])
 
         content = Text()

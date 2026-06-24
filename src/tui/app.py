@@ -8,6 +8,8 @@ from src.utils.config import load_config
 from src.tui.widgets.clock_widget import ClockWidget
 from src.tui.widgets.weather_widget import WeatherWidget
 from src.tui.widgets.status_widget import StatusWidget
+from src.tui.widgets.timer_widget import TimerWidget
+from src.tui.widgets.chat_history import ChatHistoryWidget
 
 
 class AssistantApp(App):
@@ -17,12 +19,15 @@ class AssistantApp(App):
         super().__init__()
         self.config = config or load_config()
         self.orchestrator: Orchestrator | None = None
+        self._chat_history_visible = False
 
     def compose(self) -> ComposeResult:
         with Container(id="main"):
             yield ClockWidget()
             yield WeatherWidget()
+            yield TimerWidget()
             yield StatusWidget()
+            yield ChatHistoryWidget()
 
     def on_mount(self) -> None:
         self._ensure_pulseaudio()
@@ -32,6 +37,8 @@ class AssistantApp(App):
 
         status = self.query_one(StatusWidget)
         self.orchestrator = Orchestrator(self.config, status)
+        self.orchestrator.set_timer_widget(self.query_one(TimerWidget))
+        self.orchestrator.set_chat_widget(self.query_one(ChatHistoryWidget))
         self.orchestrator.start()
 
     @staticmethod
@@ -64,3 +71,25 @@ class AssistantApp(App):
 
     def key_l(self) -> None:
         self.query_one(StatusWidget).toggle_logs()
+
+    def key_h(self) -> None:
+        chat = self.query_one(ChatHistoryWidget)
+        chat.toggle()
+        self._chat_history_visible = chat.is_visible
+
+    def key_up(self) -> None:
+        if self._chat_history_visible:
+            self.query_one(ChatHistoryWidget).cursor_up()
+
+    def key_down(self) -> None:
+        if self._chat_history_visible:
+            self.query_one(ChatHistoryWidget).cursor_down()
+
+    def key_enter(self) -> None:
+        if self._chat_history_visible and self.orchestrator:
+            chat = self.query_one(ChatHistoryWidget)
+            sel = chat.selected_id
+            if sel is not None:
+                self.orchestrator.conversations.switch_to(sel)
+                chat.toggle()
+                self._chat_history_visible = False

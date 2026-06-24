@@ -42,7 +42,10 @@ class AudioCapture:
             return
         chunk = indata.flatten().tobytes()
         if self.callback_fn:
-            self.callback_fn(chunk)
+            try:
+                self.callback_fn(chunk)
+            except Exception:
+                pass
 
     def stop(self) -> None:
         if self.stream:

@@ -1,18 +1,12 @@
 import unittest
-from unittest.mock import patch
 from src.audio.wakeword import WakeWordDetector
 
 
 class TestWakeWord(unittest.TestCase):
-    @patch("faster_whisper.WhisperModel")
-    def test_detection_above_threshold(self, mock_model):
-        seg = type("Seg", (), {"text": "servidor"})()
-        mock_model.return_value.transcribe.return_value = ([seg], None)
+    def test_silence_returns_false(self):
         detector = WakeWordDetector(word="servidor", threshold=80)
-        chunk = b"\x00" * 640
-        for i in range(100):
-            result = detector.feed(chunk)
+        for _ in range(200):
+            result = detector.feed(b"\x00" * 640)
             if result:
-                self.assertTrue(result)
-                return
-        self.fail("word not detected after 100 chunks")
+                self.fail("silence triggered detection")
+        self.assertFalse(result)

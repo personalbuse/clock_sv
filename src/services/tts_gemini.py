@@ -18,6 +18,7 @@ def synthesize(text: str, api_key: str,
                         }
                     }
                 },
+                "automatic_function_calling": {"disable": True},
             },
         )
         audio_data = response.candidates[0].content.parts[0].inline_data.data

@@ -1,0 +1,10 @@
+{
+  "wake_word": "servidor",
+  "embedding_dim": 2688,
+  "n_estimators": 200,
+  "train_samples": 1195,
+  "train_accuracy": 1.0,
+  "mean_pos_score": 0.97744,
+  "mean_neg_score": 0.006051282051282052,
+  "max_neg_score": 0.03
+}
