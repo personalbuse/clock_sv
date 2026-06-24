@@ -386,6 +386,7 @@ class Orchestrator:
         pass
 
     def _on_email_alert(self, sender: str, summary: str) -> None:
+        logging.info("email_recibido: sender=%s", sender)
         self.status.add_log(f"email recibido: {sender}")
         with self._lock:
             self._pending_email_alerts.append((sender, summary))
@@ -393,6 +394,8 @@ class Orchestrator:
 
     def _try_announce_email(self) -> None:
         with self._lock:
+            logging.info("try_announce: state=%s pending=%d announcing=%s",
+                         self.state.name, len(self._pending_email_alerts), self._announcing_email)
             if self.state not in (State.IDLE,):
                 return
             if not self._pending_email_alerts or self._announcing_email:
