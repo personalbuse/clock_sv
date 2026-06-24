@@ -47,7 +47,10 @@ class EmailMonitor:
 
     def start(self) -> None:
         if not self._enabled or not self._username or not self._password:
+            logging.warning("email_monitor: disabled (enabled=%s user=%s)", self._enabled, bool(self._username))
             return
+        logging.info("email_monitor: started server=%s interval=%ds mode=%s senders=%s",
+                     self._server, self._interval, self._evaluation_mode, self._important_senders)
         self._thread = threading.Thread(target=self._loop, daemon=True)
         self._thread.start()
 
@@ -96,6 +99,7 @@ class EmailMonitor:
             body = self._get_body_preview(msg)
 
             importance, summary = self._evaluate(sender, subject, body)
+            logging.info("email_monitor: eval sender=%s subj=%s -> important=%s", sender, subject, importance)
             if importance:
                 self._on_alert(sender, summary)
 
