@@ -62,6 +62,8 @@ email:
   check_interval_seconds: 30
   max_body_chars: 500
   max_emails_per_check: 5
+  important_senders: []
+  llm_model: "llama3.2:1b"
 
 audio:
   device: default

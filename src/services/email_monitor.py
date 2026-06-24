@@ -4,7 +4,6 @@ import imaplib
 import logging
 import threading
 import time
-from email.utils import parsedate_to_datetime
 
 EMAIL_SYSTEM_PROMPT = (
     "Eres un asistente que evalúa si un correo electrónico es importante "
@@ -27,18 +26,27 @@ class EmailMonitor:
         self._interval = ec.get("check_interval_seconds", 30)
         self._max_body = ec.get("max_body_chars", 500)
         self._max_per_cycle = ec.get("max_emails_per_check", 5)
+        self._important_senders = ec.get("important_senders", [])
         self._on_alert = on_alert
 
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
         self._announced_ids: set[str] = set()
+        self._backoff = 0
+        self._consecutive_failures = 0
 
         llm_cfg = config.get("llm", {})
         self._llm_provider = llm_cfg.get("provider", "ollama")
         self._groq_api_key = config.get("groq_api_key", "")
-        self._groq_model = llm_cfg.get("groq", {}).get("model", "llama-3.1-8b-instant")
-        self._ollama_endpoint = llm_cfg.get("ollama", {}).get("endpoint", "http://localhost:11434")
-        self._ollama_model = llm_cfg.get("ollama", {}).get("model", "qwen2.5:3b")
+        self._groq_model = ec.get("llm_model") or llm_cfg.get("groq", {}).get(
+            "model", "llama-3.1-8b-instant"
+        )
+        self._ollama_endpoint = llm_cfg.get("ollama", {}).get(
+            "endpoint", "http://localhost:11434"
+        )
+        self._ollama_model = ec.get("llm_model") or llm_cfg.get("ollama", {}).get(
+            "model", "llama3.2:1b"
+        )
 
     def start(self) -> None:
         if not self._enabled or not self._username or not self._password:
@@ -51,10 +59,16 @@ class EmailMonitor:
 
     def _loop(self) -> None:
         while not self._stop.is_set():
+            if self._backoff > 0:
+                self._stop.wait(self._backoff)
+                self._backoff = 0
             try:
                 self._check_email()
+                self._consecutive_failures = 0
             except Exception as e:
-                logging.error("email_monitor: %s", e)
+                self._consecutive_failures += 1
+                self._backoff = min(60, self._consecutive_failures * 10)
+                logging.error("email_monitor: %s (backoff %ds)", e, self._backoff)
             self._stop.wait(self._interval)
 
     def _check_email(self) -> None:
@@ -108,6 +122,10 @@ class EmailMonitor:
         return full[:max_chars]
 
     def _evaluate(self, sender: str, subject: str, body: str) -> tuple[bool, str]:
+        if self._quick_check(sender):
+            summary = f"correo de {sender.split('<')[0].strip()}"
+            return True, summary
+
         text = (
             f"De: {sender}\n"
             f"Asunto: {subject}\n"
@@ -116,13 +134,36 @@ class EmailMonitor:
         try:
             if self._llm_provider == "groq":
                 return self._evaluate_groq(text)
-            return self._evaluate_ollama(text)
+            if self._ollama_available():
+                return self._evaluate_ollama(text)
+            return False, ""
         except Exception as e:
             logging.error("email_monitor LLM eval failed: %s", e)
             return False, ""
 
+    def _quick_check(self, sender: str) -> bool:
+        if not self._important_senders:
+            return False
+        sender_lower = sender.lower()
+        for pattern in self._important_senders:
+            if pattern.lower() in sender_lower:
+                return True
+        return False
+
+    def _ollama_available(self) -> bool:
+        import requests
+
+        try:
+            resp = requests.get(
+                f"{self._ollama_endpoint}/api/tags", timeout=3
+            )
+            return resp.status_code == 200
+        except Exception:
+            return False
+
     def _evaluate_groq(self, text: str) -> tuple[bool, str]:
         from groq import Groq
+
         client = Groq(api_key=self._groq_api_key)
         response = client.chat.completions.create(
             model=self._groq_model,
@@ -139,6 +180,7 @@ class EmailMonitor:
 
     def _evaluate_ollama(self, text: str) -> tuple[bool, str]:
         import requests
+
         resp = requests.post(
             f"{self._ollama_endpoint}/api/chat",
             json={
@@ -150,7 +192,7 @@ class EmailMonitor:
                 "stream": False,
                 "options": {"temperature": 0.3, "num_predict": 80},
             },
-            timeout=30,
+            timeout=60,
         )
         resp.raise_for_status()
         result = (resp.json()["message"].get("content") or "").strip()
